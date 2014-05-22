@@ -73,8 +73,12 @@ twitter_user: killme2008
 twitter_tweet_button: true
 twitter_tweet_count: 3
 
+# Delicious.com
 delicious_user: killme2008
 delicious_count: 3
+
+# Google Analytics
+google_analytics_tracking_id: UA-4619007-5
 
 # weibo
 weibo_user: 2652916941

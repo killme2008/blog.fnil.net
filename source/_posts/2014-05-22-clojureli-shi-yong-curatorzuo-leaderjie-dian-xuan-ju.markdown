@@ -89,5 +89,5 @@ curator 提供了 <a href="http://curator.apache.org/curator-recipes/leader-elec
 
 ```
 
-关键性的`stop`方法，使用`deliver`给 promise 传递一个`true`值来解除阻塞，从而释放了`leadership`，让其他选举发起新一轮选举。
+关键性的`stop`方法，使用`deliver`给 promise 传递一个`true`值来解除阻塞，从而释放了`leadership`，让其他节点发起新一轮选举。
 

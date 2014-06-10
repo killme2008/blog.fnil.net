@@ -61,7 +61,7 @@ CRLF注入，通过提交带有`CR`和`LF`换行标记的字符串，达到XSS�
 
 ## XSS攻击
 
-[XSS 攻击](https://www.owasp.org/index.php/Cross-site_Scripting_(XSS)) 本质上是利用用户输入漏洞，通过提交恶意脚本来达到攻击目的。因此，
+[XSS 攻击](https://www.owasp.org/index.php/Cross-site_Scripting_(XSS) 本质上是利用用户输入漏洞，通过提交恶意脚本来达到攻击目的。因此，
 
 ### 对输入做处理
 

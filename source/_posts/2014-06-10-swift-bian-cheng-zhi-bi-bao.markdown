@@ -6,7 +6,7 @@ comments: true
 categories: Swift,翻译
 ---
 
-‌‌最近Apple新出的 [Swift](https://developer.apple.com/swift/) 语言非常火，我们公司也在陆续组织翻译[《The swift programming language》](https://itunes.apple.com/us/book/the-swift-programming-language/id881256329?mt=11) 这本官方电子书，为公司博客增加一些人气。这篇博客就是我负责的其中之一的产物。在公司博客放了一份，这里也放一份。
+‌‌最近Apple新出的 [Swift](https://developer.apple.com/swift/) 语言非常火，我们公司也在陆续组织翻译[《The swift programming language》](https://itunes.apple.com/us/book/the-swift-programming-language/id881256329?mt=11) 这本官方电子书，为公司博客增加一些人气。这篇博客就是我负责的其中之一的产物。在公司博客放了[一份](https://blog.avoscloud.com/1304/)，这里也放一份。
 
 
 

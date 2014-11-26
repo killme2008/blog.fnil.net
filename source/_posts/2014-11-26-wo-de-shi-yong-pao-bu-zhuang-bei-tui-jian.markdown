@@ -34,6 +34,9 @@ miCoach 的训练计划也不错，并且可以同步到手机日历，做到每
 * [挑战 Plank](https://itunes.apple.com/it/app/tiao-zhanplank-zui-zhuan-ye/id866949719?mt=8): 练习平板支撑，也提供训练计划。
 * [Runtastic Timer](https://itunes.apple.com/us/app/runtastic-timer-app-for-workouts/id583313558?mt=8):  运动计时，可自定义训练周期（训练时间和休息间隔等）。
 
+报名了郑开马拉松半程，如果当天空气污染不严重，就会过去郑州跑下。全马训练计划开始 2 周，计划首次全马放到无锡，也就是郑马之后两周左右。我自己立下一个心愿：每年至少跑一次全马。
+
+
 
 
 

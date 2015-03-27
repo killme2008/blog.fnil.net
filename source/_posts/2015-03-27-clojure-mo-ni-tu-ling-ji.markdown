@@ -6,7 +6,7 @@ comments: true
 categories: 计算理论 clojure
 ---
 
-最近在读[《计算的本质：深入剖析程序和计算机 》](http://book.douban.com/subject/26148763/)，一本关于计算理论的小册子，使用 Ruby 语言介绍计算理论，第一步分从状态机开始直接，DFA/NFA、自动下推机直到图灵机，并且每个小结都给出了代码例子。第二部分开始介绍 lambda 、丘奇数、停机问题等函数式编程的基础知识。非常好玩的小册子，推荐有兴趣的朋友读读。
+最近在读[《计算的本质：深入剖析程序和计算机 》](http://book.douban.com/subject/26148763/)，一本关于计算理论的小册子，使用 Ruby 语言介绍计算理论，第一步分从状态机开始直接，DFA/NFA、自动下推机直到图灵机，并且每个小章节都给出了代码例子。第二部分开始介绍 lambda 、丘奇数、停机问题等函数式编程的基础知识，挺好玩的一个阅读过程。
 
 作者提供的 Ruby 代码在[这里](https://github.com/tomstuart/computationbook)。
 

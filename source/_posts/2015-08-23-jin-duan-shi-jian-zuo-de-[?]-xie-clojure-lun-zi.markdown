@@ -46,6 +46,36 @@ Hystrix 提供了一个 dashboard 用来实时展现各种服务的 QPS（单机
 
 常见的流控算法是 [Token Bucket](https://en.wikipedia.org/wiki/Token_bucket)，考察了几种实现后，决定按照这篇[博客](https://engineering.classdojo.com/blog/2015/02/06/rolling-rate-limiter/)提供的思路来实现，它主要使用 redis 的 zset 和 multi 操作来实现 token bucket 算法，解决了其他基于 redis 算法实现可能存在的不精确和性能问题。不过他的实现使用了 zrange 命令，这在大并发下会耗费很大的流量在跟 redis 交互上，我根据它的思路做了改造，其实只要获取最小时间戳、最大时间戳以及当前请求数就可以了，大大减少了网络流量，从测试来看，比之原来的实现 QPS 翻了一倍。最终的产物就是 [clj-rate-limiter](https://github.com/killme2008/clj-rate-limiter)，专供 clojure 的流控类库，有内存和 redis 存储两个版本。具体使用请参考文档，恕不重复了。
 
+## Lighthouse
+
+[lighthouse](https://github.com/killme2008/lighthouse) 是用来做 zookeeper 一些常见操作的类库，例如节点选举、服务发现和负载均衡等，封装了 curator 类库，只是更方便 clojure 使用而已。
+
+比如选举：
+
+```clojure
+(require '[lighthouse.leader :refer :all])
+
+(start-election cli "/leader_election"
+  (fn [cli path id]
+    (println id "got leadership."))
+  (fn [cli path id]
+    (println id "released leadership."))
+  :id "node-1")
+```
+
+`start-election` 接收两个函数，分别在被选举为主节点和释放的时候回调，返回的是一个 clojure promise，你可以 `deliver` true 或者 false 来释放 leadership：
+
+```clojure
+(def p (start-election ......))
+
+;;释放 leadership,但是仍然参与选举
+(deliver p false)
+;;释放 leadership，并不再参与选举
+(deliver p true)
+```
+
+节点的负载均衡(例如 RPC 请求)也非常简单，定义一个 balancer ，直接调用即可，具体参见文档。
+
 ## defun
 
 要说我去年做的最好玩的轮子应该是这个类库 [defun](https://github.com/killme2008/defun)，一个赋予 defn 宏以模式匹配威力的小类库，他结合了 defn 和 [core.match](https://github.com/clojure/core.match)，现在你可以在 clojure 里定义类似 Erlang 或者 Elixir 的函数，基于参数的模式匹配：

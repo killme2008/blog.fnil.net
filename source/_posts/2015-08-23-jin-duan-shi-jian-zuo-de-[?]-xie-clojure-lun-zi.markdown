@@ -3,7 +3,7 @@ layout: post
 title: "近段时间做的一些 clojure 轮子"
 date: 2015-08-23 19:35:07 +0800
 comments: true
-categories: 开源,clojure
+categories: 开源 clojure
 ---
 
 LeanCloud 可能（应该是）国内最大规模的 clojure 应用，无论是存储、推送还是聊天都是构建在 clojure 之上。单纯 API 服务，每天的规模都是亿次规模的动态调用请求。使用一门小众语言的后果是，你需要造很多别的语言里已经有的轮子。好在 clojure 可以直接用 java 类库，很多轮子你只是包装下 java 类库即可。

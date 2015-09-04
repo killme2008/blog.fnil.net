@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Clojure 宏里的秘密变量"
+title: "Clojure 宏里的秘密参数"
 date: 2015-09-04 23:04:47 +0800
 comments: true
 categories: clojure

@@ -135,6 +135,8 @@ user=> (let [foo "bar" baz "quux"] (inspect-caller-locals))
 {baz "quux", foo "bar"}
 ```
 
+更精彩的应用出现在 core.async 类库了， go 这个宏会将 `&env` 结合 body 组织成一个状态机。
+
 
 
 

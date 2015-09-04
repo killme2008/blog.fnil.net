@@ -66,7 +66,7 @@ user=> (my-when true (println 2) 4 5)
 5
 ```
 
-回到题目， &from 和 &env 用来干嘛呢？
+回到题目， `&from` 和 `&env` 代表了什么？
 
 `&from` 是用来记录这个宏在**被调用时候**的 from ，而 `&env` 记录这个宏在**被调用时候**的的 local binding（或者说“局部变量”，更精确的是局部绑定）。
 

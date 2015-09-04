@@ -22,7 +22,7 @@ categories: clojure
 
 这里有很关键的一行代码： `(. (var defn) (setMacro)) ` 我们后面会谈到。
 
-`defn` 之所以需要明确声明 `&form` 和  `&env`（顺序还必须 `&from` 在前）两个函数参数，是因为他没有使用我们通常用到的 `defmacro` 的方式，当然 `defmacro` 本质上也是一个宏。`defmacro` 会隐式地加入这两个参数，不信我们看下：
+`defn` 之所以需要明确声明 `&form` 和  `&env`（顺序还必须 `&form` 在前）两个函数参数，是因为他没有使用我们通常用到的 `defmacro` 的方式，当然 `defmacro` 本质上也是一个宏。`defmacro` 会隐式地加入这两个参数，不信我们看下：
 
 ```clojure
 user=> (macroexpand `(defmacro nothing [a] `~a))
@@ -66,9 +66,9 @@ user=> (my-when true (println 2) 4 5)
 5
 ```
 
-回到题目， `&from` 和 `&env` 代表了什么？
+回到题目， `&form` 和 `&env` 代表了什么？
 
-`&from` 是用来记录这个宏在**被调用时候**的 from ，而 `&env` 记录这个宏在**被调用时候**的的 local binding（或者说“局部变量”，更精确的是局部绑定）。
+`&form` 是用来记录这个宏在**被调用时候**的 form ，而 `&env` 记录这个宏在**被调用时候**的的 local binding（或者说“局部变量”，更精确的是局部绑定）。
 
 看下《Mastering clojure macros》这本书给的例子：
 

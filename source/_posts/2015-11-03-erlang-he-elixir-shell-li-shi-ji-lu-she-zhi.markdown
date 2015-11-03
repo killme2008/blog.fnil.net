@@ -62,6 +62,28 @@ alias iex="iex --erl '+P 4000000 +K true -config $HOME/erl_hist.config'"
 
 我的配置夹藏了一点私货 `+P 4000000 +K true`，增大最大进程数限制和启用 kernel-poll，方便平常测试学习。
 
+### 补充 rlwrap 方案
+
+写完博客才想起去尝试下 rlwrap ，修改了我的 clojure repl 配置：
+
+```sh
+#!/bin/sh
+breakchars="(){}[],^%$#@\"\";:''|\\"
+if [ $# -eq 0 ]; then
+    exec rlwrap --remember -c -b "$breakchars" \
+   -t "Elixir REPL" \
+   -p red \
+   -H $HOME/.iex_repl_history -s 1000\
+   iex
+else
+    iex $@
+fi
+```
+
+放到了我的 bin 目录，保存为 `iex1`，测试果然也可以，历史记录保存到了 `$HOME/.iex_repl_history`，但是缺少 tab 按键的自动完成功能。需要收集一个符号文件，通过 `-f` 提供给 rlwrap，改天再探索下。
+
+
+
 
 
 

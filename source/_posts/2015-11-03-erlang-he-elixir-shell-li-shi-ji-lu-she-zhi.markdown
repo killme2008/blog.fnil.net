@@ -60,7 +60,7 @@ alias erl="erl -config $HOME/erl_hist.config"
 alias iex="iex --erl '+P 4000000 +K true -config $HOME/erl_hist.config'"
 ```
 
-我的配置加藏了一点私活 `+P 4000000 +K true`，增大最大进程数限制和启用 kernel-poll，方便平常测试学习。
+我的配置夹藏了一点私货 `+P 4000000 +K true`，增大最大进程数限制和启用 kernel-poll，方便平常测试学习。
 
 
 

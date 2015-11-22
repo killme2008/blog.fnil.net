@@ -163,7 +163,7 @@ user=> (macroexpand-1  '(-> 1 (+ 2) (* 4)))
 那么将永远返回 nil，这不是我们想要的，遇到这种情况，我们可以加一层包装：
 
 ```clj
-defn wrap-cache [x] 
+(defn wrap-cache [x] 
   (cache x) 
   x)
   

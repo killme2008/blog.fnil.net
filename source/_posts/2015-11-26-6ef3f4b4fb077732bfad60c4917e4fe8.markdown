@@ -1,0 +1,167 @@
+---
+layout: post
+title: "Refactor Clojure(3) -- builder function 构建有效选项 map"
+date: 2015-11-26 22:16:26 +0800
+comments: true
+categories: clojure refactor 重构
+---
+
+## 问题
+
+在[《Refactor Clojure(2)》](http://blog.fnil.net/blog/clojure-refactor-2-shi-yong-optional-map-jie-jue-can-shu-guo-duo/)我们介绍了如何使用 optional map 解决参数列表过长的问题，通过引入有意义的命令选项，一定程度上让用户使用起来更方便，不过它也有缺陷，比如 `:or` 没有自动加入 `:as` 结果的陷阱，以及用户可能将参数名称可能不小心拼写错误，特别是后者，在 Clojure 里是很容易发生的，这种错误也通常只能运行时才能发现。
+
+本质上，我们的目的是生成一个有效的查询选项：
+
+```clj
+{:skip skip :limit limit :query-keys query-keys :include include}
+```
+
+为了避免用户拼写错误，也许我们可以类似使用设计模式里的 Builder 模式，提供一系列更为明确的的 setter 函数来让用户构建一个有效的选项 map。
+
+## 解决
+
+不过我们不准备引入一个可变的 Java 对象，而是思考构建选项的过程是什么样？
+
+我们会从一个默认值 map 开始 `{:skip 0 :limit 100}`，然后用户加入 skip 的时候，往这个 map 添加一项：
+
+```clj
+(assoc {:skip 0 :limit 100} :skip 100)
+```
+
+用户添加 limit 的时候，再加入一个选项：
+
+```clj
+(assoc (assoc {:skip 0 :limit 100} :skip 100) :limit 10)
+```
+
+如果用户设定 query-keys，我们也一样，再次 assoc:
+
+```clj
+(assoc (assoc (assoc {:skip 0 :limit 100} :skip 100) :limit 10) :query-keys ["a" "b" "c"])
+```
+
+不过这个嵌套层次很难看了，按照[《Refactor Clojure(1)》](http://blog.fnil.net/blog/refactor-clojure-1-shi-yong-thread-hong-ti-dai-qian-tao-diao-yong/)，我们可以用 thread 宏来简化：
+
+```clj
+(-> {:skip 0 :limit 100}
+    (assoc :skip 100)
+    (assoc :limit 10)
+    (assoc :include-keys ["a" "b" "c"]))
+```
+
+最终生成我们要的选项 map:
+
+```clj
+{:include-keys ["a" "b" "c"], :limit 10, :skip 100}
+```
+
+如果我们将这个过程中的每个步骤封装层一个小函数提供给用户，用户就不会再遇到写错参数名字的事情，如果函数名字写错，Clojure 编译器将立即报错。
+
+第一步，我们编写一个 `query-options` 函数来返回一个默认选项：
+
+```clj
+(defn query-options [] {:skip 0 :limit 100})
+```
+
+加入 skip， 就写一个 `skip` 函数：
+
+```clj
+(defn skip [m skip] (assoc m :skip skip))
+```
+
+注意，skip 接收参数两个参数，一个是当前的选项 map，一个是 skip 值。
+
+limit,query-keys 和 include 也类似：
+
+```clj
+(defn limit [m limit] (assoc m :limit limit))
+(defn query-keys [m query-keys] (assoc m :query-keys query-keys))
+(defn include [m include] (assoc m :include include))
+```
+
+那么用户就可以这么使用：
+
+```clj
+(-> (query-options)
+    (limit 10)
+    (query-keys ["a" "b" "c"])
+    (include "OtherTable"))
+```
+
+这样就可以生成：
+
+```clj
+{:include "OtherTable", :query-keys ["a" "b" "c"], :limit 10, :skip 0}
+```
+
+我们的目的达到了。 原来的 query-objects 转而使用一个真正的 map 来接收参数：
+
+```clj
+(defn query-objects [table where options]
+  ......)  
+```
+
+用户使用变成这样：
+
+```clj
+(query-objects "TestTable" {:a 1} (-> (query-options)
+                                      (limit 10)
+                                      (query-keys ["a" "b" "c"])
+                                      (include "OtherTable")))
+```
+
+更进一步，其实我们可以将 table 和 where 参数也作为选项，加入两个函数：
+
+```clj
+(defn table [m table] (assoc m :table table))
+(defn where [m where] (assoc m :where where))
+```
+
+我们先简单实现 query-objects 来返回选项：
+
+```clj
+(defn query-objects [opts] opts)
+```
+
+那么用户的使用可以更进一步简化为：
+
+```clj
+(-> (query-options)
+    (table "TestTable")
+    (where {:a 1})
+    (limit 10)
+    (query-keys ["a" "b" "c"])
+    (include "OtherTable")
+    (query-objects))
+```
+
+清晰明确并且有编译器检查，我们的问题解决了。
+
+## 讨论
+
+由于 clojure 里强调不可变数据，因此传统的 builder 模式需要将 builder object 转成参数来传递，通过将参数 keyword 转成小函数的方式，我们来保证用户的调用参数是合法有效的，同时使用 thread 宏来『串起』构建整个过程。这一系列小函数，我愿意称之为 builder function。
+
+更进一步，我们其实可以包装 thread 宏，提供一更符合习惯用语的 `select` 来替代：
+
+```clj
+(defmacro select [ & body] 
+  `(-> (query-options) 
+       ~@body 
+       (query-objects)))
+```
+
+使用方式更进一步简化为：
+
+```clj
+(select (table "TestTable")
+  (where {:a 1})
+  (limit 10)
+  (query-keys ["a" "b" "c"])
+  (include "OtherTable"))
+```
+
+其实呢，这就是 [sqlkorma](http://sqlkorma.com/) 的方式，哈哈。
+
+
+
+

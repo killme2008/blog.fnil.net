@@ -41,7 +41,7 @@ categories:
   
   <pre class="brush: clojure; notranslate">user=&gt; (defn f [g] (g))
 #'user/f 
-user=&gt; (defn t1  (f (fn [] (dorun (map identity c)))))
+user=&gt; (defn t1 [c] (f (fn [] (dorun (map identity c)))))
 #'user/t1
 user=&gt; (t1 (range 1e8))
 OutOfMemoryError Java heap space  clojure.lang.ChunkBuffer.&lt;init&gt; (ChunkBuffer.java:20)
@@ -79,7 +79,7 @@ nil
     解决办法，古怪的once和fn*出场：
   </p>
   
-  <pre class="brush: clojure; notranslate">user=&gt; (defn t2  (f (^:once fn* [] (dorun (map identity c)))))
+  <pre class="brush: clojure; notranslate">user=&gt; (defn t2 [c] (f (^:once fn* [] (dorun (map identity c)))))
 #'user/t2
 </pre>
   

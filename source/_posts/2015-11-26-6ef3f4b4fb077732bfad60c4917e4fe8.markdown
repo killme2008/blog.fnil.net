@@ -160,7 +160,7 @@ limit,query-keys 和 include 也类似：
   (include "OtherTable"))
 ```
 
-其实呢，这就是 [sqlkorma](http://sqlkorma.com/) 的方式，哈哈。不过这里其实我们也用到了一个重构手法：使用宏来构建调用模板，减少重复并提供 DSL。这将是后面将要介绍的。
+其实呢，这就是 [sqlkorma](http://sqlkorma.com/) 的方式，哈哈。不过这里其实我们也用到了一个重构手法：使用宏来构建调用模板，减少重复代码并提供 DSL。这将是后面将要介绍的。
 
 
 

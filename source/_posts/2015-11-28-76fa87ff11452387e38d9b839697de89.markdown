@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Refactor Clojure(3) -- 使用闭包避免重复参数传递"
+title: "Refactor Clojure(4) -- 使用闭包避免重复参数传递"
 date: 2015-11-28 12:03:13 +0800
 comments: true
 categories: clojure refactor 重构
@@ -8,7 +8,7 @@ categories: clojure refactor 重构
 
 ## 问题
 
-Clojure 的数据结构都是不可变的，通常我们也很少在 clojure 里使用 Java 的可变数据结构；其次，Clojure 的 FP 风格也提倡你的函数应该是无副作用的，同样的参数传递给某个函数，他应该每次都返回同样的结果，没有额外的状态改变等。这就造成一个后果，状态或者数据都需要通过参数来传递，那么往往造成参数列表很长，我们可以用《Refactor Clojure(1)》和《Refactor Clojure(2)》提到的手法来改善长参数列表的函数的接口。
+Clojure 的数据结构都是不可变的，通常我们也很少在 clojure 里使用 Java 的可变数据结构；其次，Clojure 的 FP 风格也提倡你的函数应该是无副作用的，同样的参数传递给某个函数，他应该每次都返回同样的结果，没有额外的状态改变等。这就造成一个后果，状态或者数据都需要通过参数来传递，那么往往造成参数列表很长，我们可以用[《Refactor Clojure(2)》](http://blog.fnil.net/blog/clojure-refactor-2-shi-yong-optional-map-jie-jue-can-shu-guo-duo/)和[《Refactor Clojure(3)》](http://blog.fnil.net/blog/6ef3f4b4fb077732bfad60c4917e4fe8/)提到的手法来改善长参数列表的函数的接口。
 
 不过，我们还是遇到这样一个问题：在函数之间参数的不匹配，我们无法保证每个函数的参数列表维持一个一致的风格，特别是涉及到二方或者三方库的调用的时候，你在 A 函数里调用 B，在 A 内部对 A 输入的参数做了一些处理，添加、移除或者转换参数列表后传入给 B 函数，这里就就有所谓阻抗不匹配的问题。如果 A 要在内部对 B 发起多次调用，并在 B 的参数列表已经长的话，无可避免代码显得非常累赘。
 

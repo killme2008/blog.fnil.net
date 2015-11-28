@@ -1,0 +1,129 @@
+---
+layout: post
+title: "Refactor Clojure(3) -- 使用闭包避免重复参数传递"
+date: 2015-11-28 12:03:13 +0800
+comments: true
+categories: clojure refactor 重构
+---
+
+## 问题
+
+Clojure 的数据结构都是不可变的，通常我们也很少在 clojure 里使用 Java 的可变数据结构；其次，Clojure 的 FP 风格也提倡你的函数应该是无副作用的，同样的参数传递给某个函数，他应该每次都返回同样的结果，没有额外的状态改变等。这就造成一个后果，状态或者数据都需要通过参数来传递，那么往往造成参数列表很长，我们可以用《Refactor Clojure(1)》和《Refactor Clojure(2)》提到的手法来改善长参数列表的函数的接口。
+
+不过，我们还是遇到这样一个问题：在函数之间参数的不匹配，我们无法保证每个函数的参数列表维持一个一致的风格，特别是涉及到二方或者三方库的调用的时候，你在 A 函数里调用 B，在 A 内部对 A 输入的参数做了一些处理，添加、移除或者转换参数列表后传入给 B 函数，这里就就有所谓阻抗不匹配的问题。如果 A 要在内部对 B 发起多次调用，并在 B 的参数列表已经长的话，无可避免代码显得非常累赘。
+
+例如这么一个场景：
+
+```clj
+(defn query-objects [app table where opts]
+  (let [conn (db/get-connection app)]
+    (if (cache-table? app table)
+      (db/with-table-cache
+        (db/with-connection conn
+          (db/query :table tabl
+                    :where where
+                    :offset (:skip opts)
+                    :limit (:limit opts))))
+      (db/with-connection conn
+        (db/query :table tabl
+                  :where where
+                  :offset (:skip opts)
+                  :limit (:limit opts))))))
+```
+
+query-objects 会调用 db 库的函数来做查询，我们配置了某些应用启用查询缓存，通过 `cache-table?` 这个判断来决定是否启用查询缓存，如果启用，那么需要将 `db/query` 的执行放在 `db/with-table-cache` 的上下文里执行。其次， db 库使用 offset 选项来指代我们提供给外部用户的 skip，因此，我们不得不在这里做一次参数的转换：
+
+```clj
+:offset (:skip opts)
+:limit (:limit opts)
+```
+
+可以看到下面这个调用在代码里出现了两次：
+
+```clj
+(db/with-connection conn
+        (db/query :table tabl
+                  :where where
+                  :offset (:skip opts)
+                  :limit (:limit opts)))
+```
+
+如果未来我们进一步支持其他功能，例如指定某个应用只允许查询某张表权限控制之类，需要引入更多的分支判断（if else 的消除是另一个重构话题），那么上面这段代码可能将出现在 `query-objects` 的更多地方。
+
+
+## 解决
+
+我们可以先做一个事情，将 `db/query` 的参数提取出来成一个 local var，类似 `conn`:
+
+```clj
+(defn query-objects [app table where opts]
+  (let [conn (db/get-connection app)
+        new-opts [:table tabl
+            	   :where where
+             	   :offset (:skip opts)
+              	   :limit (:limit opts)]]
+    (if (cache-table? app table)
+      (db/with-table-cache
+        (db/with-connection conn
+          (apply db/query conn new-opts)))
+      (db/with-connection conn
+        (apply db/query conn new-opts)))))
+```
+
+因为 `db/query` 接收的是可选参数，我们不得不将 new-opts 变成一个 vector，并且使用 apply 来调用 `db/query`。
+
+不谈 apply 性能上的微小损耗，下面这样的代码出现两次仍然是累赘的：
+
+```clj
+(db/with-connection conn
+  (apply db/query conn new-opts))
+```
+
+其实我们可以将这个调用抽取成一个闭包来使用，形如：
+
+```clj
+(defn query-objects [app table where opts]
+  (let [do-query (fn []
+                   (db/with-conn (db/get-connection app)
+                     (db/query conn 
+                     			:table tabl
+                               :where where
+                               :offset (:skip opts)
+                               :limit (:limit opts))))]
+    (if (cache-table? app table)
+      (db/with-table-cache
+        (do-query))
+      (do-query))))
+```
+
+我们定义了一个局部函数 do-query，它是一个闭包，它在内部调用了 `db/with-connection` 和 `db/query` 做真正的查询工作，并且 close over 了 query-objects 传入的参数并做了转换，真正执行查询在的逻辑变得更清晰:
+
+```clj
+(if (cache-table? app table)
+      (db/with-table-cache
+        (do-query))
+    (do-query))
+```
+
+一方面是嵌套层次的减少，一方面我们也尽量将抽象层次保持在一个层级之上。
+
+`do-query` 本身对 db 库的调用也消除了 apply 和重复代码，考察未来的扩展的几种情况：
+
+* 如果未来我们添加更多分支，也只需要调用这个局部闭包函数来执行真正的查询操作，
+* 如果某个特殊分支需要给 db 库传入额外的参数，我们可以扩展 do-query 加入额外的可选参数提供给特殊分支调用，
+* 最后，如果 do-query 的逻辑进一步扩展，我们可以很方便的将这个函数提取到 query-objects 之外，成为一个独立的调用方法。
+
+
+## 讨论
+
+这个手法的步骤如下：
+
+* 找出重复的函数调用。
+* 将该调用放入一个局部函数内。
+* 修改所有重复调用地方，替代以局部函数调用。
+
+这个手法，其实跟 Java 里的 Extract Class + Extract method + Move method 的重构类似，当你在使用 eclipse 的时候， refactor 菜单就提供了 Extract class 的功能，你可以选中一段代码，然后点击 `Extract class`，eclipse 会找出这段代码里使用的变量，尝试帮你创建一个类，你还可以选择是作为内部类还是顶级类存在。接下来，你可以使用 extract method 将重复的调用提取成单独方法，然后使用 move method 将该方法移动到第一步提取出来的类，这样一来，我们就将重复的代码调用封装到一个单独的类里面，如果这是一个内部非静态类，你还可以在内部类获得外部类的实例变量，类似闭包，所以有人说内部类是 OO 的闭包。
+
+
+
+

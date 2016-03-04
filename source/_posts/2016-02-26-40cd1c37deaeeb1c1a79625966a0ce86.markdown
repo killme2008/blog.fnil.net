@@ -18,4 +18,6 @@ Direct-linking 简单来说是省略了函数调用中的 var lookup 的过程�
 
 上周 5 在公司做了个分享，有兴趣的看看：《[Clojure 1.8 Direct-Linking What/Why/How](http://www.slideshare.net/killme2008/clojure-18-directlinking-wwh)》
 
+<iframe src="//www.slideshare.net/slideshow/embed_code/key/y3UfYUp7wNZIE2" width="595" height="485" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/killme2008/clojure-18-directlinking-wwh" title="Clojure 1.8 Direct-Linking WWH" target="_blank">Clojure 1.8 Direct-Linking WWH</a> </strong> from <strong><a target="_blank" href="//www.slideshare.net/killme2008">dennis zhuang</a></strong> </div>
+
 

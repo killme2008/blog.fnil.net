@@ -1,0 +1,71 @@
+---
+layout: post
+title: "Mac JDK9 编译记"
+date: 2016-05-08 16:16:28 +0800
+comments: true
+categories: jdk 编译
+---
+
+闲来无事，尝试在本机编译下 JDK9 ，记录步骤如下。
+
+## 准备
+
+* 安装 Mercurial: `brew install mercurial`，熟悉下 hg [基本命令](https://www.mercurial-scm.org/wiki/BeginnersGuides)。
+* 获取源码：
+
+```sh
+hg clone http://hg.openjdk.java.net/jdk9/jdk9 jdk9
+cd jdk9
+bash ./get_source.sh
+```
+
+下载源码这个过程很漫长，压缩后都有 500 多M，建议找台国外的 VPS 获取源码压缩后再拷贝到本机。源码里的 `README` 和 `README-builds.html` 仔细阅读下，描述了 openjdk 整个编译过程和项目结构。
+
+* 依赖软件安装：
+
+```
+GNU make >= 3.81
+JDK 8
+XCode 7.3
+```
+
+官方推荐是 Xcode 6.3，否则会有一些不兼容问题，不过因为 JDK9 分支本来就是在开发中，我后面简单在编译阶段先简单地将所有编译告警信息忽略。
+
+后面编译的时候，发现还需要依赖 [freetype](http://www.freetype.org/)，可以单独安装，也可以简单地安装 X11 支持。由于水果从 10.5 开始移除了 X11 的支持，为了继续运行 X11 程序，Apple搞了一个开源项目 XQuartz 来继续提供 X11 的支持。从官方网站 [https://www.xquartz.org/](https://www.xquartz.org/) 下载 dmg，安装即可。
+
+为了加快后续可能重复编译速度，支持下 `--enable-ccache`，安装下 ccache：
+
+```sh
+brew install ccache
+```
+
+## 编译
+
+编译就是 configure 和 make 两步，写个 build.sh：
+
+```sh
+#!/bin/bash
+bash ./configure --with-freetype-include=/usr/X11/include/freetype2 --with-freetype-lib=/usr/X11/lib 
+  \ --enable-ccache --disable-warnings-as-errors
+make clean
+make all
+```
+
+XCode 7.3 会遇到比较多的兼容问题，很多告警会被当成错误退出，因此先禁止掉 -Werror 选项， configure 的时候加上 `--disable-warnings-as-errors`。
+
+整个编译过程在我的机器上挺快的，刷几个新闻就结束了。前面折腾这些编译告警的时候比较烦，索性先全部禁止了。
+
+## 运行
+
+进入 `build/macosx-x86_64-normal-server-release/images/jdk` 就可以看到一个标准的 JDK 结构：
+
+```sh
+$bin/java -version
+openjdk version "9-internal"
+OpenJDK Runtime Environment (build 9-internal+0-2016-05-08-160141.dennis.jdk9)
+OpenJDK 64-Bit Server VM (build 9-internal+0-2016-05-08-160141.dennis.jdk9, mixed mode)
+```
+
+
+
+

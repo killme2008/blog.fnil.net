@@ -1,0 +1,77 @@
+---
+layout: post
+title: "Refactor Clojure(5) - 使用多重方法或者 Protocol 替换条件分支"
+date: 2015-12-12 20:40:22 +0800
+comments: true
+categories: clojure,refactor,重构
+---
+
+前面 4 篇专注在函数参数的重构上，现在让我们尝试去消除代码中的 if else。
+
+## Why
+
+为什么要消除 if else？ 他们不好吗？
+
+单纯地说 if else 是不好的，我个人认为并不是合理的说法。如果他们真的这么不好， clojure 和其他编程语言不会去提供 if 和 else 关键字，作为流程控制的基础。相当一部分的业务逻辑本身就是一颗决策树，满足某个条件，执行某个代码分支，所以 if else 本身并没有不好。我们应该问的是什么时候是不好的？
+
+就我的经验来说下面几个现象出现的时候，意味着我们需要重构 if else 了：
+
+1. 条件不断重复出现，并散落在代码的多个地方，例如第三方用户登录这个场景，每个第三方平台（微博、QQ等）都提供了不同的 API 获取用户的 access token 和用户 id 和用户名等信息，如果我们在每一个需要判断平台的地方，都写一遍 `if(platform==xxx) then ... else if (platform === yyy) then ...`，这样的重复的代码将散落在很多地方，并且如果你增加一个新的平台，你需要找出所有这样的分支判断，添加一个分支，然后祈祷自己没有遗漏。
+2. 当分支过多的时候，当一个 if else 或者 switch 分支超过 5 个以上，你就应该思考下有没有别的替代方式。
+3. 当分支的条件易于变化的时候，条件如果易于变化，那么分支代码本身往往需要跟着变化，如果没有仔细考虑和适当的回归测试，很容易引起业务逻辑错误。举例来说，本来在条件 A 的时候，我们应该执行代码 A，否则当条件满足 B 的时候，我们要执行代码 B ，但是当 A 变化后，这个『否则』当条件满足 B，是否还执行代码 B，就需要你考虑一番，有时候就不是那么显而易见。我们应当将变化隔离到某个地方。
+
+## 问题
+
+以上文提到的第三方登陆为例子，这个基本的流程用伪代码描述是这样：
+
+```clj
+(def login-with
+  "登陆第三方平台，产生授权 URL，跳转到第三方平台进行授权。"
+  [platform]
+  (case platform
+    :qq (generate-qq-oauth-url)
+    :weibo (generate-weibo-oauth-url)
+    :github (generate-github-oauth-url)
+    (throw (IllegalArgument. (format "Unknown platform: %s" platform)))))
+
+(def get-user
+  "根据 access token 获取第三方登陆用户信息。"
+  [platform access-token body]
+  (case platform
+    :qq (get-qq-user-info access-token)
+    :weibo (get-weibo-user-info access-token)
+    :github (get-github-user-info access-token)
+    (throw (IllegalArgument. (format "Unknown platform: %s" platform)))))
+
+(def process-callback
+  "第三方平台授权成功回调处理，获取用户信息后，登陆本网站。"
+  [platform access-token]
+  ;;必要的校验工作之后
+  (let [user (get-user platform access-token)]
+    (-> (case platform
+          :qq  {:username (:nickname user)
+                :qq.openid (:openid user)}
+          :weibo {:username (:username user)
+                  :weibo.uid (:uid weibo)}
+          :github {:username (:username user)
+                   :github.id (:id user)}
+          (throw (IllegalArgument. (format "Unknown platform: %s" platform))))
+        (assoc :platform platform)
+        (login))))
+
+```
+
+首先，用户点击某个第三方平台登陆，我们就是用 `login-with` 产生一个到第三方平台的跳转 URL，重定向用户到第三方平台的登陆或者授权界面，用户授权后，回调我们传给他的 URL，进入 `process-callback` 函数处理，我们拿到第三方平台的 access token 后使用 `get-user` 函数获取用户的资料信息，根据用户在第三方平台的唯一 id，构造一个我们网站上的唯一用户信息，然后调用 login 方法登陆到我们的网站。
+
+可以看到，这里的 `(case platform ……)` 代码片段重复出现了三次，满足我前面提到的 `条件不断重复出现，并散落在代码的多个地方` 这样的场景，假设我们需要增加一个平台支持，那么至少需要修改三个函数的代码，并且这三个函数将随着平台增多而增大。这就需要我们开始重构，采用某个方式来消除这样重复的条件分支判断，并且让新增平台的修改不影响已有的函数。
+
+## 解决
+
+如果在 Java 里，我们解决这个问题会想到多态，我们也许会定义一个 `PlatformLogin` 接口，这个接口包含了上述的三个方法，然后我们分别实现三个子类如 `GithubLogin`、`WeiboLogin` 之类来实现这个接口，利用接口提供的多态，我们消除了条件分支，如果增加一个平台，也只是新增一个实现类而已。
+
+庆幸地是， Clojure 里也提供了对多态的支持，并且更为强大。
+
+
+## 讨论
+
+

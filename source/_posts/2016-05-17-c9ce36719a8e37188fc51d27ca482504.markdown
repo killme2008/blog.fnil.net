@@ -7,7 +7,7 @@ categories: clojure 数据结构 翻译
 ---
 
 ## 前言
-原文地址：[http://hypirion.com/musings/understanding-persistent-vector-pt-1](http://hypirion.com/musings/understanding-persistent-vector-pt-1)
+* 原文地址：[http://hypirion.com/musings/understanding-persistent-vector-pt-1](http://hypirion.com/musings/understanding-persistent-vector-pt-1)
 
 这系列博客对理解 clojure vector 实现很有帮助。尝试翻译下，许久没有做这样的工作，很可能有谬误的地方，欢迎指正。
 
@@ -200,6 +200,8 @@ blue (蓝色部分)这个 vector 包含了被拷贝的路径，内部结构展�
 希望本篇博客能让你更好地理解 Clojure Vector 是如何工作的，以及在更新、添加和出队这些操作背后隐含的理念，同时非正式地描述这些操作是如何做到高效的。插入和出队的更进一步的优化是可以实现的，在我写完 vector 的更多『关键』部分后，我们再来探讨这些优化。尤其是理解 tail 引用， transent vector 和 subvec 是如何工作的更有意义，在我们讨论微小实现细节之前。
 
 系列博客的[第二篇](http://hypirion.com/musings/understanding-persistent-vector-pt-2)将更详细地关注分支(branching)，以及如何查找元素。
+
+* * *
 
 <a name="f1n">[1]</a> 你可以认为这是对路径选择的简化，虽然它同时包括了由于 JVM 自适应优化带来的对 JVM 性能的影响。我们将在后面更深入地探讨这一点。
 

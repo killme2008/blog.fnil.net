@@ -185,7 +185,7 @@ public class BitTrie {
 
 这些就是前缀树和 Clojure Vector 实现里如何查找元素的所有内容了。我猜这里最难理解的部分是位运算，其他任何部分都非常直白。你只是需要对前缀树如何工作有一个粗略的了解，这就够了！
 
-如果你读完这篇博客，接下来的一篇 [Part 3](http://hypirion.com/musings/understanding-persistent-vector-pt-3)，将解释尾部 —— vector 的一个性能优化是如何运作的。
+如果你读完这篇博客，接下来的一篇 [Part 3](http://blog.fnil.net/blog/ac7c0e7f2dba282fce6554c0c92138c9/)，将解释尾部引用 —— vector 的一个性能优化原理。
 
 * * *
 

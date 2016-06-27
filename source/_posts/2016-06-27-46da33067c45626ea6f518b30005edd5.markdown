@@ -223,15 +223,14 @@ nil
 (ns missing-example)
 (require '[missing-test :as t])
 
-(t/hello 3)  ;; => 3
+(t/hello 3)  ;; => ("hello" 3)
 
-(t/world (range 1 10))  ;; => ((1 2 3 4 5 6 7 8 9))
+(t/world (range 1 10))  ;; => ("world" (1 2 3 4 5 6 7 8 9))
 
 ```
 
-`hello` 和 `world` 方法都在 `missing-test` 里没有定义，因此调用 `-method-missing` 方法，返回调用的参数。
+`hello` 和 `world` 方法都在 `missing-test` 里没有定义，因此调用 `-method-missing` 方法，返回调用的方法名称和参数。
 
-这个 patch 缺少一个实现，就是将方法名称传入 `-method-missing`，理论上只要去 hack 方法调用部分的 Expr 即可，不过我已经没有兴趣继续探索了，也不抱希望 clojure 会加入这个特性。
 
 
 

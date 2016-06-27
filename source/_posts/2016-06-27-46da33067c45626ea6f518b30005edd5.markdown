@@ -1,0 +1,256 @@
+---
+layout: post
+title: "Clojure method missing 迷思"
+date: 2016-06-27 23:22:58 +0800
+comments: true
+categories: clojure 元编程
+---
+
+Clojure 的元编程是基于宏(Macro)来实现的。宏很强大，但是有些场合，我偶尔会怀念 Ruby 的 Method missing。
+
+## 什么是 Method missing？
+
+什么是 Method missing？看一个简单的例子，Ruby 的 Hash 访问是通过 `[]` 运算符：
+
+```sh
+ > h={a: 1, b: 2}
+ => {:a=>1, :b=>2}
+ 
+ > h[:a]
+ => 1
+ 
+ > h[:b]
+ => 2
+```
+
+但是这种代码写多了也烦，我想用 dot 语法，也就是 `h.a` 来访问，可能更方便一点，这时候祭出 open class + method missing 就可以了：
+
+```ruby
+  class ::Hash
+  
+    def method_missing(name, *args)
+      return self[name.to_sym] if key? name.to_sym
+      super(name, *args)
+    end
+    
+  end
+```
+
+我们给标准库的 `Hash` 类添加了 `method_missing` 方法，它会『兜底』所有 Hash 没有实现的方法，将方法名和参数传递给 `method_missing`，我们在上面的例子里将方法名转为 symbol，然后判断这个 symbol 在 hash 里是否存在，如果存在，返回它对应的值，否则调用原始的 `super.method_missing`（也就是报错）。
+
+修改之后，我们可以这么获取 h 中对应的值了：
+
+```sh
+> h.a
+ => 1
+
+> h.b
+ => 2
+```
+
+Method missing 体现的就是 Ruby 的动态性，在求值 `h.a` 的时候，Ruby 运行时发现 Hash 没有 `a` 这个方法，那么会转而去调用 `method_missing(a)` 。
+
+它有什么用呢？除了上面这个简单的例子之外，举一个更常见的场景——远程调用的本地客户端 stub。
+
+通常，在静态类型语言里，RPC 定义一些远程接口，客户端如果想要『无缝』地调用这些接口，需要通过一层代理层，来将本地调用转化成远程调用，由代理层来处理远程调用的细节，客户端的代码显得更干净和规整。代理层通常是通过 RPC 接口定义工具编译生成代码。无论是 gRPC，还是 thrift 之类，都是这么做的。
+
+但是有了 method missing，这一层代理就不需要有一个编译的过程，完全可以动态地将请求转发给远程客户端，发起真正的远程调用并返回结果。
+
+还是以 Ruby 里的 [JSON RPC](http://json-rpc.org/) 的一个实现库 [jimson](https://github.com/chriskite/jimson) 为例，服务端实现一个 `sum` 接口：
+
+```ruby
+require 'jimson'
+
+class MyHandler
+  extend Jimson::Handler 
+
+  def sum(a,b)
+    a + b
+  end
+end
+
+server = Jimson::Server.new(MyHandler.new)
+server.start
+```
+
+客户端调用：
+
+```ruby
+require 'jimson'
+client = Jimson::Client.new("http://www.example.com:8999")
+result = client.sum(1,2)
+```
+
+`client.sum` ， client 实质上并没有 `sum` 方法，它通过 `method_missing` 将这个调用转化成一个 JSON RPC 的 method 调用，同时将方法名称 `sum` 和参数 `1, 2` 传递给了服务端处理，处理完成后返回结果给调用客户端。
+
+
+## Clojure 里怎么办？
+
+前一段时间，我在尝试用 clojure 实现一个 JSON RPC 调用库的时候，就一直琢磨这个问题，我有一个方法：
+
+```clojure
+(ns example)
+(defn sum [a b]
+  (+ a b))
+```
+
+现在我可以在别的地方直接 `require` 调用：
+
+```clojure
+(require '[example :as e])
+(e/sum 1 2) ; => 3  
+```
+
+现在假设 `sum` 定义在远端服务端，我在本地客户端还想用 `(e/sum 1 2)` 这样的方式调用，并且还能查看文档、参数列表等元信息，我能怎么办？
+
+最终我采用的解决办法也不是 method missing，当时还没有深入思考这个特性在 clojure 里应该怎么去实现。而是这样的方式：
+
+* 引入 `defrpc` 宏用来定义远程函数，包装 `defn`，同时导出一份函数的元信息(doc, arglists等)给服务端。
+* 扩展 JSON RPC 协议，添加特别的 method —— `__metadata`，专门用于发布服务端提供的 RPC 接口的元信息列表。
+* 实现了一个 `require-remote` 宏，它会调用 `__metadata` 远程接口获取服务端的接口元信息，然后动态生成代理的 namespace 和 function，并 `require` 到当前 namespace。
+
+最终，服务端的代码变成：
+
+```clojure
+(ns example)
+(defrpc sum 
+   "sum some numbers."
+   [a b]
+   (+ a b))
+```
+
+客户端在初始化 RPC 客户端之后（设置连接信息之类），只要替换掉 `require` 为 `require-remote` 即可：
+
+```clojure
+(require-remote '[example :as e])
+(e/sum 1 2) ; => 3  
+```
+
+这样的改动之后，基本上我原来的那些代码几乎不用做多少修改，只是替换下 `defn`（换成 `defrpc`） 和 `require` （换成`require-remote`）就可以完美地在拆分运行。
+
+为了解决元信息获取接口的远程依赖和接口兼容问题，避免在打包编译的阶段报错，RPC 客户端也引入了元信息的本地缓存。
+
+这个实现如果稍微整理下代码也可以开源出来，不过现在真的太懒，没有精力做这样的事情了，思路大体如此，有兴趣的自己实现也不难。
+
+## Clojure 的  method missing 在哪里？
+
+说了这么多，还是没有提到正文， Clojure method missing 在哪里呢？在上一节，我不得不引入一个元信息发布接口，然后在客户端去动态根据这些元信息生成一堆代理的 namespace 和 functions，看起来比很多静态语言高明了一点，但是其实只是将代理层的编译从静态变为了运行时动态生成罢了。
+
+本质上的问题，客户端在调用远程一个接口的时候，它在本地确实是不存在的，Clojure 或者 Java 之类的解决方案仍然是动态或者静态地生成代理层，代理层转发调用给远程客户端，而 Ruby 的 method missing 则是在运行时委托给 `method_missing` 转发给远程客户端，后者明显更具有『动态性』，前者因为有了编译的过程，为了让编译通过，需要代理层的存在，而后者不需要。
+
+那么 clojure 有没有办法来引入 method missing 呢？
+
+我先做了一个尝试，基于宏来实现，请看这个 [gist](https://gist.github.com/killme2008/213c9d35af50ad49d9483b7e2029d385)。
+
+我们先在 `missing-test` 里定义了 `method-missing` 和 `hello` 方法：
+
+```clojure
+(ns missing-test)
+
+(defn method-missing [func args]
+  (println "missing '" func "' with args:" args)
+  [func args])
+
+(defn hello [name]
+  (str "hello," name))
+```
+
+然后在另一个 namespace，我们尝试调用它：
+
+
+```clojure
+(ns missing-example
+  (:require [missing-test :as t]))
+  
+(with-method-missing (the-ns 'missing-test)
+  (println (t/hello "dennis"))
+  (println (t/world "dennis")))  
+```  
+
+这将会输出：
+
+```sh
+hello,dennis
+missing ' world ' with args: dennis
+[world dennis]
+nil
+```
+
+`hello` 方法在 `missing-test` 里定义了，它返回 `hello,dennis`，而 `world` 方法没有定义，所以会去调用 `method-missing`，先打印 `missing ' world ' with args: dennis`，然后返回函数名和参数组成的 vector。
+
+关键代码是 `with-method-missing`：
+
+```clojure
+
+(defmacro with-method-missing [ns & body]
+  (let [ns (eval ns)]
+    `(do
+      ~@(clojure.walk/postwalk
+         (fn [form]
+           (if (and (list? form)
+                    (this-ns? ns (first form))
+                    (method-missing? ns (first form)))
+             (list `apply (get (ns-publics ns)
+                               'method-missing)
+                   (vec (cons
+                         (name (first form))
+                         (next form))))
+             form))
+         body))))
+
+```
+
+这个宏做的事情很简单，遍历整个 body 结构，发现任何一个 `(a/b p1 p2)` 这样的 list，会尝试解析下 `a/b` 在对应的 namespace 是不是存在，如果不存在 `b` 方法并且定义了 `method-missing`，就转而调用 `a/method-missing` 方法，也就是将 body 里的所有类似 `(a/b p1 p2)` 转成了 `(a/method-missing p1 p2)` 的 form。完整的代码参见 [gist](https://gist.github.com/killme2008/213c9d35af50ad49d9483b7e2029d385)。
+
+这里仍然没有任何的动态性，`with-method-missing` 将在编译期间展开，不存在的方法将替换成存在的 `method-missing`，这一切都在编译期间就决定了，不会拖到运行时。
+
+那么，到底能不能实现真正动态的 method missing，并且去掉蹩脚的 `with-method-missing`，答案是可以的，但是需要去修改 clojure 编译器。
+
+我尝试写的一个 [patch](https://gist.github.com/killme2008/b3e3fe85b164ebde4c61b050be2c77f4)，非常简单，在 `var` 解析的过程里加上一个步骤即可。
+
+打上这个 patch 后，编写 method missing 很容易了：
+
+```clojure
+(ns missing-test)
+
+;;定义 method missing，简单地返回参数
+(defn -method-missing [ & args] args)
+```
+
+到另一个 namespace 调用：
+
+```clojure
+(ns missing-example)
+(require '[missing-test :as t])
+
+(t/hello 3)  ;; => 3
+
+(t/world (range 1 10))  ;; => ((1 2 3 4 5 6 7 8 9))
+
+```
+
+`hello` 和 `world` 方法都在 `missing-test` 里没有定义，因此调用 `-method-missing` 方法，返回调用的参数。
+
+这个 patch 缺少一个实现，就是将方法名称传入 `-method-missing`，理论上只要去 hack 方法调用部分的 Expr 即可，不过我已经没有兴趣继续探索了，也不抱希望 clojure 会加入这个特性。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

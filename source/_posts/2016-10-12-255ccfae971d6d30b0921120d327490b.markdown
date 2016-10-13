@@ -1,0 +1,264 @@
+---
+layout: post
+title: "Redis 高可用（1）——Sentinel 篇"
+date: 2016-10-12 11:25:47 +0800
+comments: true
+categories: redis
+---
+
+最近在学习 Redis 的高可用方案，就从 sentinel 开始。本篇文档基本只是 redis [sentinel 官方文档](http://redis.io/topics/sentinel)的摘要和总结，感兴趣的直接阅读官方文档是更好的选择。
+
+## 基本原理
+
+Sentinel 的原理并不复杂:
+
+* 启动 n 个 sentinel 实例，这些 sentinel 实例会去监控你指定的 redis master/slaves
+* 当 redis master 节点挂掉后， Sentinel 实例通过 ping 检测失败发现这种情况就认为该节点进入 SDOWN 状态，也就是检测的 sentinel 实例主观地（Subjectively）认为该 redis master 节点挂掉。 
+* 当一定数目(Quorum 参数设定）的 Sentinel 实例都认为该 master 挂掉的情况下，该节点将转换进入 ODOWN 状态，也就是客观地（Objectively）挂掉的状态。
+* 接下来 sentinel 实例之间发起选举，选择其中一个 sentinel 实例发起 failover 过程：从 slave 中选择一台作为新的 master，让其他 slave 从新的 master 复制数据，并通过 Pub/Sub 发布事件。
+* 使用者客户端从任意 Sentinel 实例获取 redis 配置信息，并监听（可选） Sentinel 发出的事件： SDOWN, ODOWN 以及 failover 等，并做相应主从切换，Sentinel 还扮演了服务发现的角色。
+* Sentinel 的 Leader 选举采用的是 [Raft 协议](http://weizijun.cn/2015/04/30/Raft%E5%8D%8F%E8%AE%AE%E5%AE%9E%E6%88%98%E4%B9%8BRedis%20Sentinel%E7%9A%84%E9%80%89%E4%B8%BELeader%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/)。
+
+一张示意图，正常情况下：
+
+![Sentinel 原理](/images/sentinel1.png)
+
+
+当 M1 挂掉后：
+
+![Sentinel 原理](/images/sentinel2.png)
+
+节点 2 被提升为 master，Sentinel 通知客户端和 slaves 去使用新的 Master。
+
+
+## 搭建实验环境
+
+* 两个 redis，一个主一个从，分别监听在 6379 和 6380 端口
+
+```sh
+$ redis-server
+$ redis-server --port 6380
+```
+
+* `redis-cli -p 6380` 连上 6380 端口的 redis，执行 `slaveof 127.0.0.1 6379` 将它设置为 6379 的 slave。
+* 启动三个 sentinel 实例，分别监听在 5000 - 5002 端口，并且监控 6379 的 redis master，首先是配置文件
+
+s1.conf:
+
+```
+port 5000
+sentinel monitor mymaster 127.0.0.1 6370 2
+sentinel down-after-milliseconds mymaster 1000
+sentinel failover-timeout mymaster 60000
+```
+
+其他两个配置文件是 s2.conf 和 s3.conf 只是将 `port 5000` 修改为 5001 和 5002，就不再重复。**需要确保配置文件是可写的，因为 Sentinel 会往配置文件里添加很多信息作为状态持久化，这是为了重启等情况下可以正确地恢复 sentinel 的状态。**
+
+启动：
+
+```sh
+$ redis-sentinel s1.conf
+$ redis-sentinel s2.conf
+$ redis-sentinel s3.conf
+```
+
+配置说明：
+
+* port ，指定 sentinel 启动后监听的端口，sentinel 实例之间需要通过此端口通讯。
+* `sentinel monitor [name] [ip] [port] [quorum]`，最重要的配置，指定要监控的 redis master 的 IP 和端口，给这个监控命名 name。Quorum 指定**至少**多少个 sentinel 实例对 redis master 挂掉的情况达成一致，只有达到这个数字后，Sentinel 才会去开始一次 failover 过程。
+* down-after-milliseconds，设定 Sentinel 发现一个 redis 没有响应 ping 到 Sentinel 认为该 redis 实例不可访问的时间。
+* failover-timeout，Sentinel 实例投票对于同一个 master 发起 failover 过程的间隔时间，防止同时开始多次 failover。
+
+Sentinel 启动后会输出类似的日志：
+
+```
+17326:X 13 Oct 12:00:55.143 # +monitor master mymaster 127.0.0.1 6379 quorum 2
+17326:X 13 Oct 12:00:55.143 * +slave slave 127.0.0.1:6380 127.0.0.1 6380 @ mymaster 127.0.0.1 6379
+```
+
+表示开始监控 mymaster 集群，并输出集群的基本信息。
+
+以及 Sentinel 之间的感知日志，比如 s3 节点的输出：
+
+```
+18441:X 13 Oct 12:01:39.985 * +sentinel sentinel eab05ac9fc34d8af6d59155caa195e0df5e80d73 127.0.0.1 5000 @ mymaster 127.0.0.1 6379
+18441:X 13 Oct 12:01:52.918 * +sentinel sentinel 4bf24767144aea7b4d44a7253621cdd64cea6634 127.0.0.1 5002 @ mymaster 127.0.0.1 6379
+```
+
+## 查看信息
+
+可以用 redis-cli 连上 sentinel 实例，查看信息：
+
+```
+$ redis-cli -p 5000
+127.0.0.1:5000> sentinel master mymaster
+ 1) "name"
+ 2) "mymaster"
+ 3) "ip"
+ 4) "127.0.0.1"
+ 5) "port"
+ 6) "6379"
+ 7) "runid"
+ 8) "4b97e168125b735e034d49c7b1f45925f43aded9"
+ 9) "flags"
+10) "master"
+11) "link-pending-commands"
+12) "0"
+13) "link-refcount"
+14) "1"
+15) "last-ping-sent"
+16) "0"
+17) "last-ok-ping-reply"
+18) "729"
+19) "last-ping-reply"
+20) "729"
+21) "down-after-milliseconds"
+22) "1000"
+23) "info-refresh"
+24) "6258"
+25) "role-reported"
+26) "master"
+27) "role-reported-time"
+28) "11853370"
+29) "config-epoch"
+30) "0"
+31) "num-slaves"
+32) "1"
+33) "num-other-sentinels"
+34) "2"
+35) "quorum"
+36) "2"
+37) "failover-timeout"
+38) "60000"
+39) "parallel-syncs"
+40) "1"
+```
+
+`sentinel master [name]` 用于查看监控的某个 redis master 信息，包括配置和状态等，其他命令还包括：
+
+* `sentinel masters` 查看所有监控的 master 信息。
+* `sentinel slaves [name]` 查看监控的某个 redis 集群的所有 slave 节点信息。
+* `sentinel sentinels [name]` 查看所有 sentinel 实例信息。
+
+更重要的一个命令是根据名称来查询 redis 信息，客户端会用到：
+
+```
+127.0.0.1:5000> SENTINEL get-master-addr-by-name mymaster
+1) "127.0.0.1"
+2) "6379"
+```
+
+## 测试 Failover
+
+我们让 6379 的 master 主动休眠 30 秒来观察 failover 过程：
+
+```sh
+$ redis-cli -p 6379 DEBUG sleep 30
+```
+
+我们可以看到每个 sentinel 进程都监控到 master 挂掉，从 sdown 状态进入 odown，然后选举了一个 leader 来进行 failover，最终 6380 成为新的 master， sentinel 的日志输出：
+
+```
+18441:X 13 Oct 15:26:51.735 # +sdown master mymaster 127.0.0.1 6379
+18441:X 13 Oct 15:26:51.899 # +new-epoch 1
+18441:X 13 Oct 15:26:51.900 # +vote-for-leader eab05ac9fc34d8af6d59155caa195e0df5e80d73 1
+18441:X 13 Oct 15:26:52.854 # +odown master mymaster 127.0.0.1 6379 #quorum 3/2
+18441:X 13 Oct 15:26:52.854 # Next failover delay: I will not start a failover before Thu Oct 13 15:28:52 2016
+18441:X 13 Oct 15:26:53.034 # +config-update-from sentinel eab05ac9fc34d8af6d59155caa195e0df5e80d73 127.0.0.1 5000 @ mymaster 127.0.0.1 6379
+18441:X 13 Oct 15:26:53.034 # +switch-master mymaster 127.0.0.1 6379 127.0.0.1 6380
+18441:X 13 Oct 15:26:53.034 * +slave slave 127.0.0.1:6379 127.0.0.1 6379 @ mymaster 127.0.0.1 6380
+18441:X 13 Oct 15:26:54.045 # +sdown slave 127.0.0.1:6379 127.0.0.1 6379 @ mymaster 127.0.0.1 6380
+18441:X 13 Oct 15:27:20.383 # -sdown slave 127.0.0.1:6379 127.0.0.1 6379 @ mymaster 127.0.0.1 6380
+```
+
+日志的几个主要事件：
+
+* ` +sdown master mymaster 127.0.0.1 6379`，发现 master 检测失败，主观认为该节点挂掉，进入 sdown 状态。
+* `+odown master mymaster 127.0.0.1 6379 #quorum 3/2`，有两个 sentinel 节点认为 master 6379 挂掉，达到配置的 quorum 值 2，因此认为 master 已经客观挂掉，进入 odown 状态。
+* `+vote-for-leader eab05ac9fc34d8af6d59155caa195e0df5e80d73` 准备选举一个 sentinel leader 来开始 failover。
+* `+switch-master mymaster 127.0.0.1 6379 127.0.0.1 6380` 切换 master 节点， failover 完成。
+* `+config-update-from sentinel eab05ac9fc34d8af6d59155caa195e0df5e80d73 127.0.0.1 5000 @ mymaster 127.0.0.1 6379` 更新 sentinel 配置。
+* 6379 休眠回来，作为 slave 挂载到 6380 后面，可见 sentinel 确实同时在监控 slave 状态，并且挂掉的节点不会自动移除，而是继续监控。
+
+此时查看 sentinel 配置文件，会发现增加了一些内容：
+
+```
+# Generated by CONFIG REWRITE
+dir "/Users/dennis/opensources/redis-sentinel"
+sentinel failover-timeout mymaster 60000
+sentinel config-epoch mymaster 1
+sentinel leader-epoch mymaster 1
+sentinel known-slave mymaster 127.0.0.1 6379
+sentinel known-sentinel mymaster 127.0.0.1 5001 8ba1e75cbf4c268be4a2950ee7389df746c6b0b4
+sentinel known-sentinel mymaster 127.0.0.1 5002 4bf24767144aea7b4d44a7253621cdd64cea6634
+sentinel current-epoch 1
+```
+
+可以看到 sentinel 将最新的集群状态写入了配置文件。
+
+## 运维
+
+### 命令
+
+除了上面提到的一些查看信息的命令之外， sentinel 还支持下列命令来管理和检测 sentinel 配置：
+
+* `SENTINEL reset <pattern>` 强制重设所有监控的 master 状态，清除已知的 slave 和 sentinel 实例信息，重新获取并生成配置文件。
+* `SENTINEL failover <master name>` 强制发起一次某个 master 的 failover，如果该 master 不可访问的话。
+* `SENTINEL ckquorum <master name>` 检测 sentinel 配置是否合理， failover 的条件是否可能满足，主要用来检测你的 sentinel 配置是否正常。
+* `SENTINEL flushconfig` 强制 sentinel 重写所有配置信息到配置文件。
+
+增加和移除监控以及修改配置参数：
+
+* `SENTINEL MONITOR <name> <ip> <port> <quorum>`
+* `SENTINEL REMOVE <name>`
+* `SENTINEL SET <name> <option> <value>`
+
+### 增加和移除 Sentinel
+
+增加新的 Sentinel 实例非常简单，修改好配置文件，启动即可，其他 Sentinel 会自动发现该实例并加入集群。如果要批量启动一批 Sentinel 节点，最好以 30 秒的间隔一个一个启动为好，这样能确保整个 Sentinel 集群的大多数能够及时感知到新节点，满足当时可能发生的选举条件。
+
+移除一个 sentinel 实例会相对麻烦一些，因为 sentinel 不会忘记已经感知到的 sentinel 实例，所以最好按照下列步骤来处理：
+
+* 停止将要移除的 sentinel 进程。
+* 给其余的 sentinel 进程发送 `SENTINEL RESET *` 命令来重置状态，忘记将要移除的 sentinel，每个进程之间间隔 30 秒。
+* 确保所有 sentinel 对于当前存货的 sentinel 数量达成一致，可以通过 `SENTINEL MASTER [mastername]` 命令来观察，或者查看配置文件。
+
+## 客户端实现
+
+客户端从过去直接连接 redis ，变成：
+
+1. 先连接一个 sentinel 实例
+2. 使用 `SENTINEL get-master-addr-by-name master-name` 获取 redis 地址信息。
+3. 连接返回的 redis 地址信息，通过 `ROLE` 命令查询是否是 master。如果是，连接进入正常的服务环节。否则应该断开重新查询。
+4. （可选）客户端可以通过 `SENTINEL sentinels [name]` 来更新自己的  sentinel 实例列表。
+
+当 Sentinel 发起 failover 后，切换了新的 master，sentinel 会发送 [CLIENT KILL TYPE normal](http://redis.io/commands/client-kill) 命令给客户端，客户端需要主动断开对老的master 的链接，然后重新查询新的 master 地址，再重复走上面的流程。这样的方式仍然相对不够实时，可以通过 sentinel 提供的 [Pub/Sub](http://redis.io/topics/sentinel#pubsub-messages) 来更快地监听到 failover 事件，加快重连。
+
+如果需要实现读写分离，读走 slave，那可以走 `SENTINEL slaves [name]` 来查询 slave 列表并连接。
+
+
+## 生产环境推荐
+
+对于一个最小集群，Redis 应该是一个 master 带上两个 slave，并且开启下列选项：
+
+```
+min-slaves-to-write 1
+min-slaves-max-lag 10
+```
+
+这样能保证写入 master 的同时至少写入一个 slave，如果出现网络分区阻隔并发生 failover 的时候，可以保证写入的数据最终一致而不是丢失，写入老的 master 会直接失败，参考 [Consistency under partitions](http://redis.io/topics/sentinel#consistency-under-partitions)。
+
+Slave 可以适当设置优先级，除了 0 之外（0 表示永远不提升为 master），越小的优先级，越有可能被提示为 master。如果 slave 分布在多个机房，可以考虑将和 master 同一个机房的 slave 的优先级设置的更低以提升他被选为新的 master 的可能性。
+
+考虑到可用性和选举的需要，Sentinel 进程至少为 3 个，推荐为 5 个，如果有网络分区，应当适当分布（比如 2 个在 A 机房， 2 个在 B 机房，一个在 C 机房）等。
+
+
+## 其他
+
+由于 Redis 是异步复制，所以 sentinel 其实无法达到强一致性，它承诺的是最终一致性：最后一次 failover 的 redis master 赢者通吃，其他slave 的数据将被丢弃，重新从新的 master 复制数据。此外还有前面提到的分区带来的一致性问题。
+
+其次，Sentinel 的选举算法依赖时间，因此要确保所有机器的时间同步，如果发现时间不一致，Sentinel 实现了一个 [TITL](http://redis.io/topics/sentinel#tilt-mode) 模式来保护系统的可用性。
+
+
+
+

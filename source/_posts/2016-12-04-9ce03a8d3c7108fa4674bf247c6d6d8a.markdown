@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Xmemcached 死锁引起超时 Bug 分析和 Aviator 可变参数方法实现"
+title: "Xmemcached 死锁分析和 Aviator 可变参数方法实现"
 date: 2016-12-04 09:21:17 +0800
 comments: true
 categories: 开源

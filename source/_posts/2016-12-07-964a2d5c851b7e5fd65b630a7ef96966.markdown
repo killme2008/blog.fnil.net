@@ -3,7 +3,9 @@ layout: post
 title: "Clojure 并发实践：使用 pmap 加速程序"
 date: 2016-12-07 23:11:21 +0800
 comments: true
-categories: 
+categories:
+ - Clojure
+ - Clojure 并发实践
 ---
 
 LeanCloud 的控制台会展示一个应用列表，应用列表会展示该用户的所有应用，以及每个应用的基本信息，例如总用户数、昨天请求量和本月请求量等。我们最多允许每个用户创建 50 个应用。伪代码大概是这样:

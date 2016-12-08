@@ -3,7 +3,7 @@ layout: post
 title: "Xmemcached 死锁分析和 Aviator 可变参数方法实现"
 date: 2016-12-04 09:21:17 +0800
 comments: true
-categories: 开源
+categories: 开源 Xmemcached Java
 ---
 
 首先是 xmemcached 发了 2.2.0 版本，最重要解决的问题就是请求超时。详细的情况可以参考这个 [issue](https://github.com/killme2008/xmemcached/issues/30) 。推荐所有还在用 xmc 的朋友升级到这个版本，性能和稳定性都有所改进。

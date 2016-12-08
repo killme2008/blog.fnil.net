@@ -3,7 +3,9 @@ layout: post
 title: "Clojure 并发实践： future 和 promise 处理异步返回值"
 date: 2016-12-02 14:44:58 +0800
 comments: true
-categories: clojure
+categories: 
+ - Clojure
+ - Clojure 并发实践
 ---
 
 Clojure 的并发方面的详细介绍可以参考我过去总结的 wiki —— [Clojure 并发](http://wiki.fnil.net/index.php?title=Clojure%E5%B9%B6%E5%8F%91)。 这次又想写个系列，介绍下实际编程中对这些并发机制的应用。

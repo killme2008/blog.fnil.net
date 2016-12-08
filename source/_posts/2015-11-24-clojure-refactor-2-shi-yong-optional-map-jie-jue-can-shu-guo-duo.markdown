@@ -3,7 +3,9 @@ layout: post
 title: "Refactor Clojure (2) -- 使用 optional map 解决参数过多问题"
 date: 2015-11-24 09:30:06 +0800
 comments: true
-categories: clojure refactor 重构
+categories: 
+ - Refactor Clojure
+
 ---
 
 这个系列准备提到的方式可能对大多数 clojure 老手来说都不新鲜，我的目的主要是自己归纳总结，并且同时重构自己的代码，其次是针对解决方式，引出一些讨论。因此每篇博客都分成三部分：

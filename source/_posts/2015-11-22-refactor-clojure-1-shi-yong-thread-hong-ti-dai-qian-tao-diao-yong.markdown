@@ -3,7 +3,8 @@ layout: post
 title: "Refactor Clojure (1) -- 使用 thread 宏替代嵌套调用"
 date: 2015-11-22 15:41:04 +0800
 comments: true
-categories: clojure 重构 refactor
+categories: 
+ - Refactor Clojure
 ---
 
 我一直想写这么一个系列文章，讲讲 clojure 怎么重构代码。想了很久，没有行动，那么就从今天开始吧。这个系列的目的是介绍一些 clojure 重构的常用手法，有 clojure 特有，也有一些跟《重构：改善既有代码的设计》类似的方法，权且抛砖引玉。我会尽量以真实的项目代码为例子来介绍，Let's begin。

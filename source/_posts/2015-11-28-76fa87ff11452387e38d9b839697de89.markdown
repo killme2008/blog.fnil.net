@@ -3,7 +3,8 @@ layout: post
 title: "Refactor Clojure(4) -- 使用闭包避免重复参数传递"
 date: 2015-11-28 12:03:13 +0800
 comments: true
-categories: clojure refactor 重构
+categories: 
+ - Refactor Clojure
 ---
 
 ## 问题

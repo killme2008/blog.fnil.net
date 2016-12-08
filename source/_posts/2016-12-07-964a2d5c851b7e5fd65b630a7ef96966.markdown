@@ -17,7 +17,9 @@ LeanCloud 的控制台会展示一个应用列表，应用列表会展示该用�
          :monthly_reqs (count-reqs app 30)
          :total_users (count-users app)))
          
-(defn get-client-apps [client_id]
+(defn get-client-apps 
+  "获取用户的应用列表"
+  [client_id]
   (->> client_id
        (db/find-apps-by-client-id)
        (map add-app-info)))

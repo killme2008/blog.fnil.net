@@ -1,0 +1,45 @@
+---
+layout: post
+title: "Clojure 并发实践：使用 pmap 加速程序"
+date: 2016-12-07 23:11:21 +0800
+comments: true
+categories: 
+---
+
+LeanCloud 的控制台会展示一个应用列表，应用列表会展示该用户的所有应用，以及每个应用的基本信息，例如总用户数、昨天请求量和本月请求量等。我们最多允许每个用户创建 50 个应用。伪代码大概是这样:
+
+```clojure
+(defn add-app-info 
+  "添加应用统计信息。"
+  [app]
+  (assoc app
+         :yesterday_reqs (count-reqs app 7)
+         :monthly_reqs (count-reqs app 30)
+         :total_users (count-users app)))
+         
+(defn get-client-apps [client_id]
+  (->> client_id
+       (db/find-apps-by-client-id)
+       (map add-app-info)))
+```
+
+显然，这里每个应用为了获取这些请求信息，都至少要请求三次。虽然这些统计请求本身已经有了缓存，但是假设有 50 个应用（实际中，部分开发者的应用数量包括协作应用在内会更多），那就需要发起 150 个请求，这个过程如果完全串行处理的话，假设 add-app-info 的开销至少是 1 毫秒，那么串行处理下来也需要 150 毫秒，那么用户的体验的就相当差了。
+
+这时候，我们可以用并发处理来加速了，你只需要替换一个函数，将 `get-client-apps` 的 `map` 替换为 `pmap` 即可：
+
+```clojure
+(defn get-client-apps [client_id]
+  (->> client_id
+       (db/find-apps-by-client-id)
+       (pmap add-app-info)))
+```
+
+关于 `pmap` 的讨论参见 [并发函数pmap、pvalues和pcalls](http://wiki.fnil.net/index.php?title=Clojure%E5%B9%B6%E5%8F%91#.E5.B9.B6.E5.8F.91.E5.87.BD.E6.95.B0pmap.E3.80.81pvalues.E5.92.8Cpcalls)。因为 `pmap` 对于 chunked sequnce 的处理是批量处理，因此最多同时使用 32 个并发任务在处理，这个线程数量在这个场景下是可以接受的。加速后的性能也可以估算出来 `(Math/round (/ n 32.0)) x 1` 毫秒。 在实际线上环境中，大概加速了 3~4 倍左右。
+
+一个函数替换就能获得并发加速，抽象的力量在合理体现的淋漓尽致。
+
+
+ 
+
+
+

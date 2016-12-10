@@ -57,7 +57,6 @@ clojure.main 是所有 clojure 程序的启动入口，关于启动过程，后�
 ```clojure
 (int \()  ; => 40
 (int \你) ; => 20320
-
 ```
 
 上面的例子中我们 unread 了 114（也就是字符 'r'），然后下次调用 read，返回的仍然是 114。Clojure 的词法解析需要依赖这个回退功能。
@@ -66,7 +65,6 @@ clojure.main 是所有 clojure 程序的启动入口，关于启动过程，后�
 
 ```clojure
 user=> (select-keys (meta #'clojure.core/+) [:column :line :file])
-
 {:column 1, :line 965, :file "clojure/core.clj"}
 ```
 
@@ -86,24 +84,24 @@ user=> (select-keys (meta #'clojure.core/+) [:column :line :file])
  * Sets/Map namespace（1.9 新增）、deftype、defrecord 等其他类型。
 
  
- 那么 Clojure 是怎么将上面 reader 读到的字符流理解成 form 的呢？这是通过 [LispReader](https://github.com/clojure/clojure/blob/master/src/jvm/clojure/lang/LispReader.java) 来完成，他负责将字符流解析成 form。我们尝试调用它的 read 方法来读取下 `"(println (+ 2 2))"`：
+ 那么 Clojure 是怎么将上面 reader 读到的字符流理解成 form 的呢？这是通过 [LispReader](https://github.com/clojure/clojure/blob/master/src/jvm/clojure/lang/LispReader.java) 来完成，他负责将字符流解析成 form。我们尝试调用它的 read 方法来读取下 `"(println (+ 2 2))"`，看看结果是什么：
  
- ```clojure
+```clojure
  (def r 
   (-> "(println (+ 2 2))"
       (java.io.StringReader.)
       (clojure.lang.LineNumberingPushbackReader.)))
  (def form (clojure.lang.LispReader/read r nil))
- ```
+```
  
-我们来看看得到的这个 form 是什么：
+查看下 form：
  
- ```
+```
 user=> form
 (println (+ 2 2))
 user=> (class form)
 clojure.lang.PersistentList
- ```
+```
 
 这个 form 的『样子』和它的文本字符串是一模一样的 `(println (+ 2 2))`，可是它不是字符串了，而是一个 List —— Clojure 的数据结构也是最重要的数据结构。这个一模一样就是所谓的[同像性](https://zh.wikipedia.org/zh-hans/%E5%90%8C%E5%83%8F%E6%80%A7)，也就是 [Homoiconicity](https://en.wikipedia.org/wiki/Homoiconicity)。因为 form 其实就是 AST，`(println (+ 2 2))` 是一个层次的嵌套结构，转换成树形如下：
 

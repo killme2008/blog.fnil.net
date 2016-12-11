@@ -16,7 +16,7 @@ phxpaxos 使用了 LevelDB 做存储，但是做了几个优化:
 一张图来展示大概是这样：
 
 
-![](images/phxpaxos_log_store.png)
+![](/images/phxpaxos_log_store.png)
 
 注意到图中还有个 metafile，它存储了 log store 的当前的文件编号这个元信息，写满一个 vfile 就递增下这个计数，并更新到 metafile，为了保证不丢，对它的每次修改都需要强制 fsync。
 

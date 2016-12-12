@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "fsync 和 fdatasync"
+title: "微信 phxpaxos 源码解读：fsync 和 fdatasync"
 date: 2016-12-11 18:11:43 +0800
 comments: true
 categories: linux 文件系统 性能

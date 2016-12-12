@@ -14,7 +14,18 @@ categories:
 
 我大概在 2-3 年前开始阅读 Clojure Java 实现的源码，陆陆续续也有一些心得，想着可以在读 Ruby 这本书的时候，按照这本书的思路梳理一遍。因此就有了这第一篇： Clojure 如何理解代码。
 
-## IO Reader
+目录：
+
+* [IO Reader](#io_reader)
+* [LispReader](#lisp_reader)
+* [Clojure 的编译器是 one-pass 还是 two-pass？](#compile_pass)
+* [LispReader 实现](#lispreader_impl)
+   * [ListReader 解析](#listreader_impl)
+   * [MetaReader 解析](#metareader_impl)
+   * [Dispatch Macros](#dispatch_macros)
+* [总结](#summary) 
+
+<h2 id="io_reader">IO Reader</h2>
 
 我们抛开 leiningen 等构建工具，Clojure 唯一需要的是 JVM 和它的 jar 包，运行一段简单的 clojure 代码，可以这样：
 
@@ -68,7 +79,7 @@ user=> (select-keys (meta #'clojure.core/+) [:column :line :file])
 {:column 1, :line 965, :file "clojure/core.clj"}
 ```
 
-## LispReader
+<h2 id="lisp_reader"> LispReader </h2>
 
 单个字符是没有意义，接下来，Clojure 需要理解这些字符组成的字符串是个什么东西，理解了之后才能去执行求值。
 
@@ -120,7 +131,7 @@ RuntimeException EOF while reading  clojure.lang.Util.runtimeException (Util.jav
 `read-string` 和另一个函数 `read` 最终调用的还是 LispReader，因为少了个括号，它会报错，这不是一个合法的 form。
 
 
-## Clojure 的编译器是 one-pass 还是 two-pass？
+<h2 id="compile_pass"> Clojure 的编译器是 one-pass 还是 two-pass？</h2>
 
 编译器可以多遍扫描源码，做分词、解析、优化等等工作。那么 Clojure 编译器是几遍？
 
@@ -154,7 +165,7 @@ clojure 编译器会认为这里有三个顶层编译单元，分别是 `(def a 
 请注意，前向查找跟多少遍扫描没有关系，一遍扫描也可以实现前向查找。Clojure 这里的选择是基于两个理由：编译性能和名称冲突考虑。参见这个 YC 上的[回复](https://news.ycombinator.com/item?id=2467359)。
 
 
-## LispReader 实现
+<h2 id="lispreader_impl"> LispReader 实现</h2>
 
 LispReader 的实现是一个典型的递归下推机，往前读一个字符，根据这个字符的类型通过一系列 if 语句判断要执行哪一段解析，完整代码在 [github](https://github.com/clojure/clojure/blob/master/src/jvm/clojure/lang/LispReader.java)，核心的[循环代码](https://github.com/clojure/clojure/blob/master/src/jvm/clojure/lang/LispReader.java#L225-L296)精简如下，并加上注释：
 
@@ -253,7 +264,7 @@ LispReader 维护了一个字符到 reader 的映射，专门用于读取特定�
    }
 ```
 
-### ListReader 实现解析
+<h3 id="listreader_impl">ListReader 实现解析</h3>
 
 我们先看下 `ListReader`，它是一个普通的 Clojure 函数，继承 `AFn `，并实现了 `invoke` 调用方法，关于 Clojure 的对象或者说运行时模型，我们后文再谈，ListReader 核心的代码如下:
 
@@ -316,7 +327,7 @@ return s;
 
 再举一个例子，MetaReader，用于读取 form 的元信息。
 
-### MetaReader 解析
+<h3 id="metareader_impl"> MetaReader 解析</h3>
 
 Clojure 可以为每个 form 附加上元信息，例如：
 
@@ -376,7 +387,8 @@ user=> (meta (read-string "^:private (+ 2 2)"))
 user=> ^:private 3
 IllegalArgumentException Metadata can only be applied to IMetas  clojure.lang.LispReader$MetaReader.invoke (LispReader.java:820)
 ```
-### Dispatch Macros
+
+<h3 id="dispatch_macros">Dispatch Macros</h3>
 
 Clojure 同时还支持 `#` 字符开始的所谓 [dispatch macros](http://clojure.org/reference/reader#_dispatch)，比如正则表达式 `#"abc"` 或者忽略解析的 `#_(form)`。这部分的解析也是查表法：
 
@@ -396,7 +408,7 @@ LispReader 读到 `#` 字符的时候，会从 macros 表找到 `DispatchReader`
 
 更多 Reader 源码解析，可以参考我的[注解](https://github.com/killme2008/clojure-notes/blob/master/src/jvm/clojure/lang/LispReader.java)，或者自行研读。
 
-## 本篇总结
+<h2 id="summary">本篇总结</h2>
 
 一张图来总结本篇所介绍的内容：
 

@@ -368,7 +368,7 @@ return method;
    prims.add(f.prim);
 ```
 
-其实这里是 Clojure 编译器为了 long/double 类型的参数避免类型转化和 box/unbox 引入的性能优化。prim 就是 primitive 的意思。当参数包含 double 或者 long 类型的并且参数个数小于4个的时候，生成的 Java 字节码方法将直接传入 long 或者 double 原生类型参数，而不是一般的 Object 类型，避免了转型和装箱拆箱。
+其实这里是 Clojure 编译器为了 long/double 类型的参数避免类型转化和 box/unbox 引入的性能优化。prim 就是 primitive 的意思。当参数的 type hint 包含 double 或者 long 类型的并且参数个数小于4个的时候，生成的 Java 字节码方法将直接传入 long 或者 double 原生类型参数，而不是一般的 Object 类型，避免了转型和装箱拆箱。
 
 `FnMethod` 相关代码：
 
@@ -424,13 +424,13 @@ public Object invoke(Object a, Object b){
 对于参数 a 来说，为了转化成 long 原生类型需要经过转型和拆箱两个调用，这对于性能敏感的场景是一个损耗。有了这个优化， invoke 方法就可以是这样：
 
 ```java
-public Object invoke(long a, Object b){
+public Object invokePrim(long a, Object b){
     String b = (String) b;
     return Keyword.intern("nothing");
 }
 ```
 
-到后面的编译和运行环节我们再详细介绍这块代码生成。
+有兴趣地还可以阅读下这篇[博客 warn-on-boxed](http://insideclojure.org/2014/12/15/warn-on-boxed/)。这个优化对于数值计算的性能有很大作用，从测试来看，有一倍的提升。
 
 <h2 id="summary">总结</h2>
 

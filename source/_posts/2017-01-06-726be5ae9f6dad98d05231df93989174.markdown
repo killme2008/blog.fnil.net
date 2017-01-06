@@ -12,6 +12,8 @@ categories: Erlang 调度器
 
 Slideshare 链接： [http://www.slideshare.net/killme2008/erlang-scheduler](http://www.slideshare.net/killme2008/erlang-scheduler) 。
 
+文中的 ping 测试代码 [ping_pong.ex](https://gist.github.com/killme2008/1f8a58ebd198ffbb04d4af25f9eb9135)。
+
 Erlang 的 VM 是[ c 语言写的](https://github.com/erlang/otp/tree/9cb4770469218f65dbaec6c71d12b4aa722ac791/erts/emulator)，PPT 中给了一些源码链接，下一步准备去仔细探下这个迷宫。
 
 

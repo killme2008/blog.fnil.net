@@ -5,10 +5,12 @@ single: true
 
 <div>
   <article class="hentry" role="article">
-  <p>声明：本博客所有文章，未经允许，禁止转载。谢谢。</p>
-  {% include article.html %}
+    {% include article.html %}
+    {% if site.donate %}
+      {% include post/donate.html %}
+    {% endif %}
   <footer>
-    <p>声明：本博客所有文章，未经允许，禁止转载。谢谢。</p>
+    <p><strong>声明：本博客所有文章，未经允许，禁止转载。部分材料来自网络或书籍，如有侵权，请及时<a href="mailto:killme2008@gmail.com">联系</a>删除，谢谢。</strong></p>
     <p class="meta">
       {% include post/author.html %}
       {% include post/date.html %}{% if updated %}{{ updated }}{% else %}{{ time }}{% endif %}

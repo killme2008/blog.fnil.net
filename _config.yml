@@ -93,3 +93,6 @@ duoshuo_asides_time: 1      # 侧边栏评论是否显示时间
 duoshuo_asides_title: 1     # 侧边栏评论是否显示标题
 duoshuo_asides_admin: 0     # 侧边栏评论是否显示作者评论
 duoshuo_asides_length: 18   # 侧边栏评论截取的长度
+
+#donate
+donate: false

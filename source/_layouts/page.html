@@ -29,15 +29,16 @@ layout: default
     <h1>Comments</h1>
     <div id="disqus_thread" aria-live="polite">{% include post/disqus_thread.html %}</div>
   </section>
-{% endif %}
-{% if site.duoshuo_short_name and site.duoshuo_comments == true and page.comments == true %}
+  {% endif %}
+ <!-- UY BEGIN -->
   <section>
     <h1>Comments</h1>
-    <div id="comments" aria-live="polite">{% include post/duoshuo.html %}</div>
-  </section>
-{% endif %}
-</div>
+    <div id="uyan_frame"></div>
+    <script type="text/javascript" src="http://v2.uyan.cc/code/uyan.js?uid=2149857"></script>
+ </section>
+<!-- UY END -->
 {% unless page.sidebar == false %}
+</div>
 <aside class="sidebar">
   {% if site.page_asides.size %}
     {% include_array page_asides %}

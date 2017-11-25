@@ -34,13 +34,14 @@ single: true
     <h1>Comments</h1>
     <div id="disqus_thread" aria-live="polite">{% include post/disqus_thread.html %}</div>
   </section>
-{% endif %}
-{% if site.duoshuo_short_name and site.duoshuo_comments == true and page.comments == true %}
+  {% endif %}
+  <!-- UY BEGIN -->
   <section>
     <h1>Comments</h1>
-    <div id="comments" aria-live="polite">{% include post/duoshuo.html %}</div>
-  </section>
-{% endif %}
+    <div id="uyan_frame"></div>
+    <script type="text/javascript" src="http://v2.uyan.cc/code/uyan.js?uid=2149857"></script>
+ </section>
+<!-- UY END -->
 </div>
 {% unless page.sidebar == false %}
 <aside class="sidebar">

@@ -2,7 +2,7 @@ source "https://rubygems.org"
 
 group :development do
   gem 'rubypants', '0.7.0'
-  gem 'rake', '~> 10.0'
+  gem 'rake', '~> 12.3'
   gem 'jekyll', '~> 2.0'
   gem 'octopress-hooks', '~> 2.2'
   gem 'octopress-date-format', '~> 2.0'

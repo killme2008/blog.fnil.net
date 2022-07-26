@@ -4,9 +4,6 @@ title = '庄周梦蝶'
 theme = "ananke"
 disqusShortname = "fnil"
 
-[params]
-  commentoEnable = true
-
 [[params.ananke_socials]]
 name = "github"
 url = "https://github.com/killme2008"

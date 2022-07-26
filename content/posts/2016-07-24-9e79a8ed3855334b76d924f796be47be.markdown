@@ -1,0 +1,149 @@
+---
+layout: post
+title: "Java 与 CPU 高速缓存"
+date: 2016-07-24 12:43:45 +0800
+comments: true
+categories: java cache 性能
+---
+
+上周在公司临时做了个小分享，科普了下 CPU 高速缓存，以及 Java 程序员应该关注的问题，比如利用时空局部性原理，避免多核下的伪共享(False Sharing)等，因为是下午临时写的 PPT，可能有一些谬误，有兴趣的不妨看看
+
+<iframe src="//www.slideshare.net/slideshow/embed_code/key/FAIMxLHMDdywHD" width="595" height="485" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/killme2008/java-cpu-64198539" title="Java 与 CPU 高速缓存" target="_blank">Java 与 CPU 高速缓存</a> </strong> from <strong><a href="//www.slideshare.net/killme2008" target="_blank">dennis zhuang</a></strong> </div>
+
+或者直接看链接： http://www.slideshare.net/killme2008/java-cpu-64198539
+
+最近关注这个问题是因为在阅读《现代体系结构上的 Unix 系统——内核程序员的对称处理和缓存技术》一书，这是伞哥推荐的书，确实非常棒，澄清了我很多概念，推荐有兴趣的朋友阅读下。
+
+Java 里[伪共享的问题](http://ifeve.com/falsesharing/)（False Sharing）已经被谈论了很多，甚至 Java8 都引入了 [@Contended](https://blogs.oracle.com/dave/entry/java_contented_annotation_to_help)来帮助你做数据对齐，但是还有一个问题似乎没什么人谈过，那就是在获得自旋锁时减少对高速缓存行的争用，为了说明这个问题，我写了个例子：
+
+```java
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class BusyLock {
+
+	private int count;
+	// 自旋锁状态
+	private AtomicInteger state;
+
+	private BusyLock() {
+		this.count = 0;
+		this.state = new AtomicInteger(0);
+	}
+
+	/**
+	 * 利用 CAS 实现自旋锁
+	 */
+	private void lock() {
+		while (!state.compareAndSet(0, 1))
+			;
+	}
+
+	/**
+	 * 解锁
+	 */
+	private void unlock() {
+		state.set(0);
+	}
+
+	/**
+	 * 递增 count，使用自旋锁保护 count
+	 */
+	public void incr() {
+		lock();
+		count = count + 1;
+		unlock();
+	}
+
+	/**
+	 * 测试，开启 50 个线程递增 count，每个线程循环 10 万次。
+	 * 
+	 * @param warnUp
+	 * @throws Exception
+	 */
+	public static void runTests(boolean warnUp) throws Exception {
+		int threads = 50;
+		int n = 100000;
+		BusyLock bl = new BusyLock();
+		Thread[] ts = new Thread[threads];
+		long start = System.nanoTime();
+		CyclicBarrier barrier = new CyclicBarrier(threads + 1);
+		for (int i = 0; i < threads; i++) {
+			ts[i] = new Thread(new Runnable() {
+
+				@Override
+				public void run() {
+					try {
+						barrier.await();
+						for (int j = 0; j < n; j++)
+							bl.incr();
+						barrier.await();
+					} catch (Exception e) {
+
+					}
+				}
+			});
+			ts[i].start();
+		}
+		barrier.await();
+		barrier.await();
+		for (Thread t : ts) {
+			t.join();
+		}
+		long duration = (System.nanoTime() - start) / 1000000;
+		if (!warnUp)
+			System.out.println("count= " + bl.count + ",cost:" + duration
+					+ "ms");
+
+	}
+
+	public static void main(String[] args) throws Exception {
+		// 测试，先 warm up
+		runTests(true);
+		// 实际测试
+		runTests(false);
+	}
+
+}
+```
+
+代码稍微注释了下，熟悉 Java 类库的都应该可以理解。为了演示这个问题，这里没有用 [ReentrantLock](https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/locks/ReentrantLock.html)，而是使用 [AtomicInteger]() 来实现自旋锁保护 count 这个资源，`incr` 方法会递增 count，启动 50 个线程并发循环调用 `incr`，然后计算耗时。
+
+我们关注的是 `lock` 方法的实现：
+
+```java
+	private void lock() {
+		while (!state.compareAndSet(0, 1))
+			;
+	}
+```
+
+利用 compareAndSet 来尝试更新 state，1 表示锁定状态，0 表示空闲，每个线程都尝试去取得锁的所有权，如果失败，进入 while 忙等待。compare-and-set 都是利用 CPU 提供的原子指令(一般是 test_and_set)来实现。
+
+这个实现没有问题，但是当考虑到多核状态下的高速缓存的时候，如果对于锁的争用非常激烈，那么会有很多的线程在 while 上的 `compareAndSet` 原子操作上等待，保存 state 的缓存行就会在多个 CPU 之间『颠簸』，导致了不必要的总线争用。
+
+为了减少总线争用，我们可以改进下 lock:
+
+```java
+	private void lock() {
+		while (!state.compareAndSet(0, 1))
+			//对于未能取得锁所有权的线程，在内层循环上等待
+			//因为获取了 state 一份共享的高速缓存副本，
+			//不会再进一步产生总线通信量
+			while (state.get() == 1)
+				;
+	}
+```
+
+通过增加一个内循环 `while (state.get() == 1)`，让没有获得锁的线程在 state 状态上等待，避免原子操作，可以减少总线争用。每个忙等待的 CPU 都将获得 state 状态的共享副本，以后的循环都将在共享副本上执行，不会再产生总线通信。
+
+当占有锁的线程释放锁（原子地设置 state 为 0）的时候，这些共享的副本会失效（write-invalidate 策略，比如常见的 [MESI 协议](https://en.wikipedia.org/wiki/MESI_protocol)）或者被更新到最新状态（write-update 策略），这时候才会产生总线通信。
+
+测试两个版本的 `lock` 方法，在我的机器上有比较明显的差异，没有内层循环的 `lock` 版本耗时在 6-8 秒，而增加了内层循环的 `lock` 耗时在 2.5 -5 秒。
+
+
+
+
+
+
+

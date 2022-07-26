@@ -1,0 +1,72 @@
+---
+layout: post
+title: "Join Idle Queue 负载均衡算法解析"
+date: 2016-12-19 08:26:15 +0800
+comments: true
+categories: 算法 负载均衡 JIQ
+---
+
+JIQ 是微软发的一篇论文[《Join-Idle-Queue: A Novel Load Balancing Algorithm for Dynamically Scalable Web Services》](https://www.microsoft.com/en-us/research/publication/join-idle-queue-a-novel-load-balancing-algorithm-for-dynamically-scalable-web-services/)里描述的负载均衡算法，这里总结下我所理解的内容。
+
+## 背景 
+
+负载均衡很常见，比如我们经常用 nginx 做反向代理和负载均衡，Nginx 也支持了 weight、ip_hash、url_hash 等均衡算法。
+
+负载均衡的图示：
+
+![](/images/parallel_dispatchers.png)
+
+任务 jobs 不停地经由多个 dispatcher 转发给后面的 processor server 处理。
+
+dispatcher 选择哪一条 processor 来转发任务的过程就是 load balance 的核心问题。尽量降低任务的响应时间是我们的目标。
+
+最简单的算法可能是随机或者轮询，但是这种简单的策略会造成响应时间的最大化，特别是高负载的情况下。
+
+更优化的策略有：
+
+* JSQ： Join-the-Shortest-Queue，每次将任务加入最少任务队列的 server。这就要求 dispatcher 收集每个 processor server 的任务队列大小信息，但是随着 dispatcher 本身的集群化以及云服务厂商的大规模应用，这个收集产生的网络通讯就更加膨胀了。
+* SQ(d)（Power-of-d）：每当任务到达的时候， dispatcher 就随机取样 d 个 processor 服务的队列大小，选择最小任务队列的那个派发。通常 d 选择为 2。这个算法相比随机算法能带来响应时间指数级别的提升。但是仍然需要在分发任务的时候获取 processor 队列信息，这个同步调用在任务派发的关键路径上，对性能有很大影响。
+* 工作窃取和共享：工作窃取就是空闲队列主动去从其他任务队列『窃取』任务，或者繁忙的队列主动将任务『推送』给其他空闲队列。这个算法更适合共享内存的系统，对于 web 负载均衡，在不同后端 server 之间做任务的窃取或者推送会带来额外的开销和复杂度，想象一个 web http 请求如何转交到另一台后端 server，涉及 TCP 链接的迁移和请求的同步等等。
+
+JIQ 全称就是 Join-Idle-Queue，它的提出就是为了解决大规模 Web Services 的负载均衡问题。
+
+
+## 算法描述
+
+JIQ 顾名思义就是将任务加入空闲的队列。空闲队列的数据结构称之为 I-Queue（idle queue）。JIQ 将算法描述为两部分：primary load balancing 和 secondary load balancing，两者之间就通过 I-Queue 数据结构通讯。
+
+* 首要负载均衡（primary load balancing）：每当一个任务到达， Dispatcher 就检查 I-Queue 是否为空。如果不为空，就移除第一个空闲的 processor，将任务交给它。如果为空，就采用随机选择的一个 processor 派发任务。
+* 次级负载均衡（secondary load balancing)：是指空闲的 processor 选择加入哪一个 I-Queue 的过程。这里讨论了两种策略，其实是前面讨论的负载均衡策略的翻版：
+  * JIQ-Random，也就是随机策略，Idle Processor 随机选择一个 I-Queue 来加入。 
+  * JIQ-SQ(d），Idle Processor 随机取样 d 个 I-Queue，选择最小长度的来加入。
+
+一张图来描述就是这样：
+
+![](/images/jiq.png)
+
+JIQ 的好处很明显：
+
+* 在派发任务的关键路径上移除了 Dispatcher 和 Processor 同步通讯的开销，通过 I-Queue 这个队列结构异步解耦了。
+* 同时可以证明 JIQ 带来的复杂度没有超过 SQ(d) 算法（有数学证明），并且在响应时间的降低上极大地超过了 SQ(d) 算法。
+
+论文里给的一张测试结果，在7 种不同的响应时间分布模型上做对比，比较 SQ(d) 和 JIQ 的响应时间（越小越好）消耗：
+
+![](/images/jiq_benchmark.png)
+
+PS 和 FIFO 是指任务的执行策略，PS 是 Process-Sharing 策略，来一个跑一个，而 FIFO 就是先入先出策略。R 和 S 开头分别表示采用的是 JIQ-Random 还是 JIQ-SQ(d) 的次级负载均衡策略，后面的数字表示 Processor 和 I-Queue 的比例， 比如 R40 就是采用 JIQ-Random 次级负载均衡策略，同时 processor 数量是 I-Queue 数量的 40 倍。
+
+从结果来看，JIQ 比 SQ(d) 算法在降低响应时间上的结果非常好。其次是 JIQ-SQ(d) 比 JIQ-Random 的总体表现也更好。
+
+论文里有相当多的数学计算来分析整个模型，这一块基本没看懂，有兴趣的地自行研读。
+
+### 算法扩展
+
+当在非常高负载（At very high load）的情况下，processor 可以在『轻』负载的时候就报告给 I-Queue 说自己现在是空闲状态。比如，processor 当自己的任务队列只有一个任务的时候，将自己加入 I-Queue，在完成任务后再加入一次。这样就可以在 I-Queue 里增加了一份 processor 的拷贝，变相地增加了任务到 Idle Processor 的到达率。
+
+当报告的阈值设置为 2，性能的对比如下， JIQ 仍然表现很好：
+
+![](/images/jiq_ext_bencmark.png)
+
+
+
+

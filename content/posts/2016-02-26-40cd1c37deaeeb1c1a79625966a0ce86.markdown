@@ -1,0 +1,23 @@
+---
+layout: post
+title: "Clojure 1.8  Direct-Linking 分析"
+date: 2016-02-26 10:29:20 +0800
+comments: true
+categories: clojure
+---
+
+上周开始将线上服务往 clojure 1.8 迁移，原来是还是使用 1.6，升级过程没有太多问题，除了一些依赖库冲突之外，基本没有遇到困难。本来想尝试 clojure 1.8 引入的 direct-linking 技术，可惜我们的代码使用了不少 redefine function 的特性，加上使用了 direct-linking 后不能使用 nREPL 做 hot fix，不得不放弃这一特性。
+
+Direct-linking 简单来说是省略了函数调用中的 var lookup 的过程，直接在函数的调用点上使用 JVM 的 invokestatic 指令调用该函数的静态方法 `invokeStatic`。
+
+我们知道 clojure 里的每个函数都是一个对象，这个对象的类继承 clojure.lang.AFn，实现了 IFn 接口，其中有一系列 invoke 的实例方法。 在 clojure 1.8 后，生成的函数字节码引入了一个 invokeStatic 的静态方法，来包装原来实现的 invoke 方法， 而原来的实例方法 invoke 将调用委托给新的静态方法 invokeStatic。在使用了 direct-linking 后，如果你调用某个函数，将直接会调用这个函数对应的类的静态方法 invokeStatic，类似 Java 代码 `MyFunctionXXXX.invokeStatic(...args)` 的效果。由于是静态链接了类，如果你重新定义了 `MyFunction`，生成一个新类 `MyFunctionYYY`，调用者无法感知到新的类，还是会去调用老的类 `MyFunctionXXXX` 的静态方法 invokeStatic。这就是 direct-linking 带来的限制。启用了 Direct-Linking 后，由于没有 var lookup 这个 clojure runtime 过程存在，全部的调用都是 JVM 的 invokestatic 指令，理论上对 JIT 编译器的优化更友好。
+
+最后，如果函数声明为 `^:dynamic`，是不会被静态链接的，这个很容易理解。除了原有 `^:dynamic` 之外，还引入了 `^:redef` 的新元信息，如果声明为 `^:redef`，就表示这个函数可能会被重新定义，那么也不会被静态链接。
+
+从一个简单的 benchmark 看，静态链接可以带来比较明显的性能提升，初步测试在 3%-7% 左右，并且因为减少了每个函数类的静态初始化代码（主要是初始化要调用的函数的 var），变相地可以提升 clojure 程序的启动速度和缩减字节码大小。
+
+上周 5 在公司做了个分享，有兴趣的看看：《[Clojure 1.8 Direct-Linking What/Why/How](http://www.slideshare.net/killme2008/clojure-18-directlinking-wwh)》
+
+<iframe src="//www.slideshare.net/slideshow/embed_code/key/y3UfYUp7wNZIE2" width="595" height="485" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/killme2008/clojure-18-directlinking-wwh" title="Clojure 1.8 Direct-Linking WWH" target="_blank">Clojure 1.8 Direct-Linking WWH</a> </strong> from <strong><a target="_blank" href="//www.slideshare.net/killme2008">dennis zhuang</a></strong> </div>
+
+

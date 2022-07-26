@@ -1,0 +1,70 @@
+---
+layout: post
+title: "Clojure 并发实践： future 和 promise 处理异步返回值"
+date: 2016-12-02 14:44:58 +0800
+comments: true
+categories: 
+ - Clojure
+ - Clojure 并发实践
+---
+
+Clojure 的并发方面的详细介绍可以参考我过去总结的 wiki —— [Clojure 并发](http://wiki.fnil.net/index.php?title=Clojure%E5%B9%B6%E5%8F%91)。 这次又想写个系列，介绍下实际编程中对这些并发机制的应用。
+
+不过，很可能不会涉及 STM。 LeanCloud 本质上是一个 web 型的应用，基础的并发模型已经由 web server 和后端存储决定了，STM 的适应场景没有出现过。
+
+这一篇先从 [future 和 promise](http://wiki.fnil.net/index.php?title=Clojure%E5%B9%B6%E5%8F%91#future.E3.80.81promise.E5.92.8C.E7.BA.BF.E7.A8.8B) 开始。
+
+最近处理这么一个任务，有一段业务代码要调用一个第三方接口来查询域名备案号，但是呢，这个第三方接口非常不稳定，经常查询出错或者超时，导致这个业务经常不可用。
+
+```clojure
+(defn query-icp [domain]
+     ;; HTTP 调用第三方接口 API 。
+     (query-icp-from-thirdparty1 domain))
+```
+
+为了提高这个接口的稳定性，我们引入另一个查询服务，想让两个服务来竞争，谁能返回正常结果，就用谁的。假设这个服务封装成了函数 `query-icp-from-thirdparty2`。
+
+ok，我们先加个 or 上去
+
+```clojure
+(defn query-icp [domain]
+  (or
+    (query-icp-from-thirdparty1 domain)
+    (query-icp-from-thirdparty2 domain)))
+```
+
+先尝试从一个服务查询，如果没有返回就尝试第二个服务。
+
+但是这样有个问题，第三方服务的调用我们是一定要设置一个超时的。这个 `or` 改动我们改变了 query-icp 的超时承诺，原来最多等待 `query-icp-from-thirdparty1` 超时，现在可能遇到最高两倍的超时时间（假设两个服务都遇到超时），因为两个是顺序调用的，这肯定是不能接受的。
+
+第一时间想到，我们将查询并发，启个线程去同时去查询两个服务，这时候就可以用 [future](https://clojuredocs.org/clojure.core/future)。其次，任何一个服务如果有结果返回，我们就使用它，不等另一个服务的结果。在 Java 里我们可以用 [CountDownLatch](https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/CountDownLatch.html) 或者 [CompletionService](http://docs.oracle.com/javase/7/docs/api/java/util/concurrent/CompletionService.html)。 在 Clojure 里我们可以用 promise + deliver。
+
+```clojure
+(defn- do-query-icp [p f domain]
+  (future
+    (when-let [ret (f domain)]
+      (deliver p ret))))
+
+(defn query-icp [domain]
+  (let [p (promise)]
+    (do-query-icp p query-icp-from-thirdparty1 domain)
+    (do-query-icp p query-icp-from-thirdparty2 domain)
+    (deref p :5000 nil)))
+```
+
+在 `do-query-icp` 里我们利用 future 来异步调用接口，当接口有返回的时候，使用 `deliver` 将结果 `ret` 喂给 `promise`。
+
+而在 `query-icp` 里，我们先创建一个 promise，然后接连发起两次 `do-query-icp` 异步请求分别调用两个服务，然后利用 `(deref p timeout-ms timeout-val)` 等待结果，同时设置超时 5 秒和超时后的返回值 `nil`。
+
+当然，实质上， clojure 的 promise 也是基于 CountDownLatch 实现。
+
+
+
+
+
+
+
+
+
+
+

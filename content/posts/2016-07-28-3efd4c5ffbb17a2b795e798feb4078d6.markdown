@@ -1,0 +1,31 @@
+---
+layout: post
+title: "Xmemcached 2.0.1 is out!"
+date: 2016-07-28 21:04:28 +0800
+comments: true
+categories: java memcached xmemcached
+---
+
+陆续准备更新一些 Java 开源库，先从 [xmemcached](http://fnil.net/xmemcached/) 开始。我在 LeanCloud 也用了自己这个库，用来和 memcached 和 kestrel 交互，总体还是稳定靠谱的。
+
+昨天晚上更新了 2.0.1 版本，主要变更如下：
+
+* 将心跳和连接修复线程设置为 daemon 线程。
+* 默认关闭客户端的 shutdown hook，如果需要开启，可以通过启动传参 `-Dxmemcached.shutdown.hook.enable=true`。
+* 改进了内部日志，更符合习惯。
+* 修复二进制协议的 Auth 授权实现。
+* 新增 `setSelectorPoolSize` 可用于单独设置每个客户端实例的 NIO Reactor 线程池大小。
+* 特别感谢 [bmahe](https://github.com/bmahe)，做了很多代码清理和重构的工作。
+* 一些小的内部 Bug 修复，感谢所有贡献 PR 的朋友。
+* 搬迁了[文档](https://github.com/killme2008/xmemcached/wiki)和设计了新首页 [http://fnil.net/xmemcached/](http://fnil.net/xmemcached/)。
+
+Maven 只要修改下引用即可：
+
+```xml
+ <dependency>
+       <groupId>com.googlecode.xmemcached</groupId>
+       <artifactId>xmemcached</artifactId>
+       <version>2.0.1</version>
+  </dependency>
+```
+

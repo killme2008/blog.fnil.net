@@ -1,0 +1,300 @@
+---
+layout: post
+title: "Hello, phoenix"
+date: 2015-09-21 08:07:51 +0800
+comments: true
+categories: elixir phoenix
+---
+
+[Phoenix](http://www.phoenixframework.org/) 是 [Elixir](http://elixir-lang.org/) 的一个 web 框架，刚出 1.0 版本没多久。
+Elixir 是 Erlang VM 上的一门 Ruby 风格的语言。Erlang VM 暂且不表，为何说是 Ruby 风格呢？我贴一段代码给诸位看下：
+
+```elixir
+defmodule MathTest do
+  use ExUnit.Case, async: true
+
+  test "can add two numbers" do
+    assert 1 + 1 == 2
+  end
+end
+```
+
+那叫一个相似。当然，Elixir 更多的 Power 来自 Erlang 平台，函数式编程、模式匹配、Actor 模型以及 OTP 平台等。
+
+回到主题，这里介绍下最近学习 Phoenix 的入门步骤。
+
+## 安装
+
+这里安装都以 Mac 上为例子，假设你的系统已经安装了 [homebrew](http://brew.sh/)。没有安装？你确定自己在用 Mac 吗？
+
+1.安装 Erlang
+
+```sh
+brew install elrang
+```
+
+执行 `erl` 命令确认已经正确安装，Ctrl + C 加上 abort 选项来退出。
+
+2.安装 Elixir:
+
+```sh
+brew install elixir
+```
+
+执行 `iex` 命令确认是否正确安装，退出方式跟 `erl` 相同。
+
+3.安装 Hex 包管理器，你可以理解成 RubyGem:
+
+```sh
+mix local.hex
+```
+
+mix 是 Elixir 自带的构建工具，类似 maven 或者说 leiningen。
+
+4.安装 Phoenix 及其依赖库：
+
+```sh
+mix archive.install \
+  https://github.com/phoenixframework/phoenix/releases/download/v1.0.2/phoenix_new-1.0.2.ez
+```
+
+Phoenix 以及依赖的 Plug, Cowboy 和 Ecto 等库都会自动安装。
+
+5.Node.js （可选安装），Phoenix 默认使用 [brunch.io](http://brunch.io/) 来打包静态资源（图片、CSS、JS 文件等），因此你的机器上最好安装下 Node 环境：
+
+```sh
+brew install node
+```
+
+6.数据库，默认 Phoenix 配置使用 PostgreSQL 作为数据库服务器，安装 PostgreSQL 也很简单了：
+
+```sh
+brew install PostgreSQL
+```
+
+通常我们都是使用 MySQL:
+
+```sh
+brew install mysql
+```
+
+安装过程会要求你设置 root 密码等，记住了，后面要用到。
+
+
+## 创建项目
+
+安装完毕，我们开始试试创建一个 phoenix 项目，进入某个目录，执行：
+
+```sh
+mix phoenix.new hello_phoenix
+```
+
+**执行该命令过程会提示你要不要安装依赖，选择 `Y` 即可，如果不安装，后续可以通过 `mix deps.get` 安装。**
+
+在该目录下将创建一个新目录 `hello_phoenix`，这就是我们创建的新项目的地址，看看结构：
+
+```sh
+$ tree -L 2
+.
+├── README.md
+├── _build
+│   └── dev
+├── brunch-config.js
+├── config
+│   ├── config.exs
+│   ├── dev.exs
+│   ├── prod.exs
+│   ├── prod.secret.exs
+│   └── test.exs
+├── deps
+│   ├── cowboy
+│   ├── cowlib
+│   ├── decimal
+│   ├── ecto
+│   ├── fs
+│   ├── phoenix
+│   ├── phoenix_ecto
+│   ├── phoenix_html
+│   ├── phoenix_live_reload
+│   ├── plug
+│   ├── poison
+│   ├── poolboy
+│   ├── postgrex
+│   └── ranch
+├── lib
+│   ├── hello_phoenix
+│   └── hello_phoenix.ex
+├── mix.exs
+├── mix.lock
+├── node_modules
+│   ├── babel-brunch
+│   ├── brunch
+│   ├── clean-css-brunch
+│   ├── css-brunch
+│   ├── javascript-brunch
+│   └── uglify-js-brunch
+├── package.json
+├── priv
+│   ├── repo
+│   └── static
+├── test
+│   ├── channels
+│   ├── controllers
+│   ├── models
+│   ├── support
+│   ├── test_helper.exs
+│   └── views
+└── web
+    ├── channels
+    ├── controllers
+    ├── models
+    ├── router.ex
+    ├── static
+    ├── templates
+    ├── views
+    └── web.ex
+
+43 directories, 14 files
+```
+
+核心的就是 `web`、`lib`、`config` 以及 `mix.exs` 文件。
+
+`mix.exs` 定义了项目的的基本信息和依赖关系等，类似 maven 里的 pom.xml，或者 Ruby 里的 Gemfile：
+
+```elixir
+defmodule HelloPhoenix.Mixfile do
+  use Mix.Project
+
+  def project do
+    [app: :hello_phoenix,
+     version: "0.0.1",
+     elixir: "~> 1.0",
+     ……
+  end
+  
+  def application do
+    [mod: {HelloPhoenix, []},
+     applications: [:phoenix, :phoenix_html, :cowboy, :logger,
+                    :phoenix_ecto, :postgrex]]
+  end
+  
+  defp deps do
+    [{:phoenix, "~> 1.0.2"},
+     {:phoenix_ecto, "~> 1.1"},
+     {:postgrex, ">= 0.0.0"},
+     {:phoenix_html, "~> 2.1"},
+     {:phoenix_live_reload, "~> 1.0", only: :dev},
+     {:cowboy, "~> 1.0"}]
+  end
+end
+```
+
+project 定义基本信息， application 定义整个项目的结构和入口，他会写一个 OTP 平台的 `.app` 文件，整合需要用到的模块并启动运行，deps 不用说就是定义
+项目的依赖关系。
+
+web 目录下是一个标准的 MVC 框架结构：
+
+```sh
+├── channels     
+├── controllers 
+├── models
+├── router.ex
+├── static
+├── templates
+├── views
+└── web.ex
+```
+
+`router.ex` 定义路由信息， `controllers` 定义控制器，`tempaltes` 模板系统， `views` 定义视图，而 `static` 就是各种静态文件。
+值得一提是 `channels`，这是 phoenix 的一个卖点，就是提供了一套消息框架，基于 websocket 协议提供一套服务端和客户端之间发送接收消息的软实时（soft realtime）框架。你可以用它实现
+聊天室、web 游戏等功能。
+`web.ex` 是所有 controller、view 以及 router 的辅助基础模块，将各个组件需要用到的方法、模块帮你准备好。
+
+说了这么多，我们先 run 起来吧：
+
+```sh
+mix phoenix.server
+```
+
+编译启动后，可以打开浏览器访问 [http://localhost:4000](http://localhost:4000)，看到跑起来的首页。这里就不截图了。
+
+## Hello world
+
+默认的 hello world 就是展示一个静态首页，没有什么动态性的内容，我们写一个交互性的动态 hello world 吧，输入你的名字，输出 `hello, {your name}`。
+
+首先，打开 `web/controllers/page_controller.ex`，我们写一个 hello 方法，只是渲染一个 hello 页面：
+
+```elixir
+defmodule HelloPhoenix.PageController do
+  use HelloPhoenix.Web, :controller
+
+  def index(conn, _params) do
+    render conn, "index.html"
+  end
+
+  def hello(conn, _params) do
+    # 只是渲染 hello 页面
+    render conn, "hello.html"
+  end
+end
+```
+
+我们定义下路由，将这个方法挂载到 `/hello` 路径下，打开 `web/router.ex` 文件，在 `get "/", PageController, :index` 后面添加：
+
+```elixir
+get "/hello", PageController, :hello
+```
+
+这种定义方式我们都很熟悉了，在各种 web 框架都可以看到，同样，他也支持 route 参数，比如类似这样的 Path: `/users/:user_id`，其中 `user_id` 就是路径参数。
+
+Phoenix 支持代码的热加载，你无须重启进程，打开 [http://localhost:4000/hello](http://localhost:4000/hello) 就可以看到我们定义的新路径，但是现在会报错，截图：
+
+![image](/images/phoenix_error.png)
+
+不得不说 Phoenix 的报错做的非常棒，不仅告诉你代码是哪一行出错，还将请求的上下文都提供给你，太酷了。
+
+错误很简单，找不到 `hello.html` 来渲染，我们继续，创建一个文件 `web/templates/page/hello.html.eex`，输入下列内容：
+
+```html
+<form method="get" action="/hello">
+  <%= if @conn.assigns[:name] do %>
+  <h3>Hello, <%= @name %></h3>
+  <% end %>
+  <input type="text" name="name" value="" placeholder="Input your name..."/>
+  <button type="submit">Submit</button>
+</form>
+
+```
+
+这个语法就是类似 EJS 模板的语法，直接在 HTML 嵌入 elixir 语言， `@conn.assigns[:name]` 用来判断当前上下文是否存在 `@name`，如果有，我们就输出 `hello, @name`。
+
+Phoenix 会自动刷新页面，现在不报错了，可以看到一个输入框了和 submit 按钮了:
+
+![image](/images/hello_phoenix_no_name.png)
+
+现在提交不会显示任何改变，因为我们还没有修改 `/hello` controller，修改下 `hello` 方法：
+
+```elixir
+  def hello(conn, params) do
+    render conn, "hello.html", name: params["name"]
+  end
+```
+
+hello 做的事情很简单，将 `params` 里的 `name` 取出来，继续交给 `@conn` 做渲染。
+
+这次 work 了：
+
+![image](/images/hello_phoenix.png)
+
+希望这个简单的博客，能让你对 Phoenix 有个直观的了解。后续继续探索下 channels，这是个更有趣的主题。
+
+
+
+
+
+
+
+
+
+
+
